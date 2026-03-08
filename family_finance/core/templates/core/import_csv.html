@@ -1,0 +1,21 @@
+<!-- core/templates/core/import_csv.html -->
+{% extends 'core/base.html' %}
+
+{% block content %}
+<h2>Импорт транзакций из CSV</h2>
+
+<p>Загрузите CSV-файл в формате:</p>
+<pre>Дата,Тип,Категория,Сумма,Описание
+2025-10-28,Расход,Еда,1200,Продукты
+2025-10-29,Доход,Зарплата,50000,</pre>
+
+<form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <div class="mb-3">
+        <label for="csv_file" class="form-label">CSV-файл</label>
+        <input type="file" class="form-control" id="csv_file" name="csv_file" accept=".csv" required>
+    </div>
+    <button type="submit" class="btn btn-primary">Импортировать</button>
+    <a href="{% url 'transaction_list' %}" class="btn btn-secondary">Отмена</a>
+</form>
+{% endblock %}

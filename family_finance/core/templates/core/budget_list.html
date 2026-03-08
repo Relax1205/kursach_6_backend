@@ -1,0 +1,92 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<h2>Бюджеты</h2>
+
+{% if no_permission %}
+<div class="alert alert-warning">
+    <h4>⛔ Доступ ограничен</h4>
+    <p>У вас нет прав на управление бюджетами.</p>
+    <p>Эта функция доступна только для <strong>Главы семьи</strong> или пользователей с ролью <strong>Бухгалтер</strong>.</p>
+    <hr>
+    <p class="mb-0"><small>Обратитесь к администратору для получения прав <code>can_set_budget</code>.</small></p>
+</div>
+{% else %}
+
+<!-- Форма добавления бюджета -->
+<div class="card mb-4">
+    <div class="card-header">Установить бюджет на месяц</div>
+    <div class="card-body">
+        <form method="post">
+            {% csrf_token %}
+            
+            <!-- Отображение ошибок формы -->
+            {% if form.non_field_errors %}
+            <div class="alert alert-danger">
+                {% for error in form.non_field_errors %}
+                <p class="mb-0">{{ error }}</p>
+                {% endfor %}
+            </div>
+            {% endif %}
+            
+            <div class="row">
+                <div class="col-md-4">
+                    {{ form.category.label_tag }}
+                    {{ form.category }}
+                    {% if form.category.errors %}
+                    <div class="text-danger small mt-1">{{ form.category.errors }}</div>
+                    {% endif %}
+                </div>
+                <div class="col-md-3">
+                    {{ form.amount.label_tag }}
+                    {{ form.amount }}
+                    {% if form.amount.errors %}
+                    <div class="text-danger small mt-1">{{ form.amount.errors }}</div>
+                    {% endif %}
+                </div>
+                <div class="col-md-3">
+                    {{ form.month.label_tag }}
+                    {{ form.month }}
+                    {% if form.month.errors %}
+                    <div class="text-danger small mt-1">{{ form.month.errors }}</div>
+                    {% endif %}
+                    <small class="form-text text-muted">Формат: ГГГГ-ММ</small>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">Сохранить</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Список бюджетов -->
+{% if budgets %}
+<h3>Текущие бюджеты</h3>
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Месяц</th>
+            <th>Категория</th>
+            <th>Лимит</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for budget in budgets %}
+        <tr>
+            <td>{{ budget.month|date:"Y-m" }}</td>
+            <td>{{ budget.category.name }}</td>
+            <td><strong>{{ budget.amount }} ₽</strong></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="alert alert-secondary">
+    ℹ️ Бюджеты еще не установлены на текущий или прошлый месяц.
+</div>
+{% endif %}
+
+{% endif %}
+
+<a href="{% url 'transaction_list' %}" class="btn btn-secondary">← Назад к транзакциям</a>
+{% endblock %}

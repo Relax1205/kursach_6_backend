@@ -1,0 +1,26 @@
+<!-- core/templates/core/transaction_confirm_delete.html -->
+{% extends 'core/base.html' %}
+
+{% block content %}
+<h2>Подтверждение удаления</h2>
+
+<div class="alert alert-warning">
+    <p>Вы уверены, что хотите удалить транзакцию?</p>
+    <p>
+        <strong>{{ transaction.category.name }}</strong> — 
+        {% if transaction.category.type == "income" %}
+            +{{ transaction.amount }}
+        {% else %}
+            -{{ transaction.amount }}
+        {% endif %}
+        от {{ transaction.date }}
+        {% if transaction.description %} — {{ transaction.description }}{% endif %}
+    </p>
+</div>
+
+<form method="post">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-danger">Да, удалить</button>
+    <a href="{% url 'transaction_list' %}" class="btn btn-secondary">Отмена</a>
+</form>
+{% endblock %}

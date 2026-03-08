@@ -1,0 +1,48 @@
+<!-- core/templates/core/base.html -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Семейные финансы</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    {% load static %}
+<link rel="icon" href="{% static '/favicon.png' %}" type="image/x-icon">
+</head>
+<body>
+<div class="container mt-4">
+    <h1>Система управления личными финансами</h1>
+
+    <!-- Навигация -->
+    <nav class="mb-4">
+        <a href="{% url 'transaction_list' %}" class="btn btn-outline-primary">Транзакции</a>
+        <a href="{% url 'transaction_create' %}" class="btn btn-success">+ Транзакция</a>
+        <a href="{% url 'category_create' %}" class="btn btn-secondary">+ Категория</a>
+        <a href="{% url 'budget_list' %}" class="btn btn-info">Бюджеты</a>
+        <a href="{% url 'reports' %}" class="btn btn-warning">Отчёты</a>
+        <a href="{% url 'export_csv' %}" class="btn btn-outline-dark">Экспорт CSV</a>
+        <a href="{% url 'import_csv' %}" class="btn btn-outline-success">Импорт CSV</a>
+        <form method="post" action="{% url 'logout' %}" class="d-inline float-end">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline-danger">Выйти</button>
+        </form>
+    </nav>
+
+    <!-- Сообщения (успех, ошибка) -->
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <!-- Основной контент -->
+    {% block content %}
+    {% endblock %}
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

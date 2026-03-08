@@ -1,0 +1,18 @@
+<!-- core/templates/registration/login.html -->
+{% extends 'core/base.html' %}
+
+{% block content %}
+<h2>Вход в систему</h2>
+
+<form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit" class="btn btn-primary">Войти</button>
+</form>
+
+{% if next %}
+    <input type="hidden" name="next" value="{{ next }}" />
+{% endif %}
+
+<p>Нет аккаунта? <a href="{% url 'admin:index' %}">Создайте суперпользователя через команду `createsuperuser`</a>.</p>
+{% endblock %}
