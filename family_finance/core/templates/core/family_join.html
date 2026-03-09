@@ -1,0 +1,41 @@
+<!-- core/templates/core/family_join.html -->
+{% extends 'core/base.html' %}
+{% block content %}
+<h2>🔗 Присоединиться к семье</h2>
+
+<div class="alert alert-info">
+    <p>В текущей версии вы можете присоединиться к существующей семье через администратора.</p>
+    <p>Для создания собственной семьи используйте кнопку ниже.</p>
+</div>
+
+{% if families %}
+    <div class="card">
+        <div class="card-header">📋 Доступные семьи</div>
+        <div class="card-body">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Название</th>
+                        <th>Участников</th>
+                        <th>Создана</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for f in families %}
+                    <tr>
+                        <td>{{ f.name }}</td>
+                        <td>{{ f.members.count }}</td>
+                        <td>{{ f.created_at|date:"d.m.Y" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+{% endif %}
+
+<div class="mt-4">
+    <a href="{% url 'family_create' %}" class="btn btn-primary">➕ Создать свою семью</a>
+    <a href="{% url 'family_dashboard' %}" class="btn btn-secondary">← Назад</a>
+</div>
+{% endblock %}

@@ -1,9 +1,7 @@
 <!-- core/templates/core/transaction_form.html -->
 {% extends 'core/base.html' %}
-
 {% block content %}
 <h2>{{ title }}</h2>
-
 <form method="post">
     {% csrf_token %}
     <div class="mb-3">

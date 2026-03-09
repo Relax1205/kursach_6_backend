@@ -1,0 +1,62 @@
+<!-- core/templates/core/family_dashboard.html -->
+{% extends 'core/base.html' %}
+{% block content %}
+<h2>🏠 Панель управления семьёй</h2>
+
+{% if not is_family %}
+    <!-- Пользователь не в семье -->
+    <div class="alert alert-info">
+        <h4>Вы пока не состоите в семье</h4>
+        <p>Создайте новую семью или присоединитесь к существующей, чтобы начать совместное планирование бюджета.</p>
+        <hr>
+        <a href="{% url 'family_create' %}" class="btn btn-primary">➕ Создать семью</a>
+        <a href="{% url 'family_join' %}" class="btn btn-outline-primary">🔗 Присоединиться к семье</a>
+    </div>
+{% else %}
+    <!-- Пользователь в семье -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">📋 Информация о семье</h5>
+                </div>
+                <div class="card-body">
+                    <p><strong>Название:</strong> {{ family.name }}</p>
+                    <p><strong>Ваша роль:</strong> 
+                        {% if is_head %}
+                            <span class="badge bg-danger">Глава семьи</span>
+                        {% elif can_manage %}
+                            <span class="badge bg-success">Член семьи</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Наблюдатель</span>
+                        {% endif %}
+                    </p>
+                    <p><strong>Участников:</strong> {{ members_count }}</p>
+                    <p><strong>Транзакций:</strong> {{ transactions_count }}</p>
+                    <p><strong>Бюджетов на этот месяц:</strong> {{ budgets_count }}</p>
+                </div>
+                <div class="card-footer">
+                    {% if can_manage %}
+                        <a href="{% url 'family_members' %}" class="btn btn-outline-primary">👥 Управление участниками</a>
+                    {% endif %}
+                    {% if not is_head %}
+                        <a href="{% url 'family_leave' %}" class="btn btn-outline-danger">🚪 Покинуть семью</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">📊 Быстрая статистика</h5>
+                </div>
+                <div class="card-body">
+                    <p>Здесь будет отображаться краткая статистика по семье.</p>
+                    <a href="{% url 'reports' %}" class="btn btn-success">📈 Перейти к отчётам</a>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endif %}
+{% endblock %}

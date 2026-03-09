@@ -1,0 +1,95 @@
+<!-- core/templates/core/family_members.html -->
+{% extends 'core/base.html' %}
+{% block content %}
+<h2>👥 Участники семьи "{{ family.name }}"</h2>
+
+{% if is_head %}
+    <div class="card mb-4">
+        <div class="card-header">➕ Добавить участника</div>
+        <div class="card-body">
+            <form method="post">
+                {% csrf_token %}
+                <div class="row">
+                    <div class="col-md-5">
+                        {{ form.username.label_tag }}
+                        {{ form.username }}
+                        {% if form.username.errors %}
+                            <div class="text-danger small">{{ form.username.errors }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-4">
+                        {{ form.role.label_tag }}
+                        {{ form.role }}
+                        {% if form.role.errors %}
+                            <div class="text-danger small">{{ form.role.errors }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button type="submit" class="btn btn-success w-100">Добавить</button>
+                    </div>
+                </div>
+            </form>
+            <hr>
+            <a href="{% url 'family_invite' %}" class="btn btn-outline-primary btn-sm">
+                ✉️ Создать аккаунт и пригласить
+            </a>
+        </div>
+    </div>
+{% endif %}
+
+<!-- Список участников -->
+<div class="card">
+    <div class="card-header">📋 Список участников</div>
+    <div class="card-body">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Пользователь</th>
+                    <th>Роль</th>
+                    <th>Дата вступления</th>
+                    {% if is_head %}
+                        <th>Действия</th>
+                    {% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in members_with_roles %}
+                {% with member=item.member role=item.role %}
+                <tr>
+                    <td>
+                        <strong>{{ member.user.username }}</strong>
+                        {% if member.is_head %}
+                            <span class="badge bg-danger ms-2">Глава</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if role == 'head' %}
+                            <span class="badge bg-danger">Глава семьи</span>
+                        {% elif role == 'member' %}
+                            <span class="badge bg-success">Член семьи</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Наблюдатель</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ member.joined_at|date:"d.m.Y H:i" }}</td>
+                    {% if is_head and not member.is_head %}
+                    <td>
+                        <a href="{% url 'family_member_role' member.id %}" class="btn btn-sm btn-outline-primary">
+                            ✏️ Изменить роль
+                        </a>
+                    </td>
+                    {% elif is_head and member.is_head %}
+                    <td><span class="text-muted">—</span></td>
+                    {% else %}
+                    <td><span class="text-muted">—</span></td>
+                    {% endif %}
+                </tr>
+                {% endwith %}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<a href="{% url 'family_dashboard' %}" class="btn btn-secondary mt-3">← Назад к панели</a>
+{% endblock %}

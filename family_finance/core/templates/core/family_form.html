@@ -1,0 +1,31 @@
+<!-- core/templates/core/family_form.html -->
+{% extends 'core/base.html' %}
+{% block content %}
+<h2>{{ title }}</h2>
+<div class="card">
+    <div class="card-body">
+        <form method="post">
+            {% csrf_token %}
+            <div class="mb-3">
+                {{ form.name.label_tag }}
+                {{ form.name }}
+                {% if form.name.errors %}
+                    <div class="text-danger">{{ form.name.errors }}</div>
+                {% endif %}
+                <small class="form-text text-muted">Придумайте название для вашей семьи (например, "Семья Ивановых")</small>
+            </div>
+            <button type="submit" class="btn btn-primary">Создать семью</button>
+            <a href="{% url 'family_dashboard' %}" class="btn btn-secondary">Отмена</a>
+        </form>
+    </div>
+</div>
+
+<div class="alert alert-info mt-4">
+    <h5>ℹ️ Что произойдёт после создания?</h5>
+    <ul class="mb-0">
+        <li>Вы автоматически станете <strong>Главой семьи</strong></li>
+        <li>Вам будут доступны все права на управление бюджетами</li>
+        <li>Вы сможете приглашать других участников</li>
+    </ul>
+</div>
+{% endblock %}

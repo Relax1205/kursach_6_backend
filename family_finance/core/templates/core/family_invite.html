@@ -1,0 +1,80 @@
+<!-- core/templates/core/family_invite.html -->
+{% extends 'core/base.html' %}
+{% block content %}
+<h2>✉️ Пригласить участника в семью "{{ family.name }}"</h2>
+
+<div class="card">
+    <div class="card-body">
+        <p class="text-muted mb-4">
+            Создайте аккаунт для нового члена семьи. Он получит доступ к общим финансам сразу после регистрации.
+        </p>
+        
+        <form method="post">
+            {% csrf_token %}
+            
+            {% if form.non_field_errors %}
+            <div class="alert alert-danger">
+                {% for error in form.non_field_errors %}
+                    <p class="mb-0">{{ error }}</p>
+                {% endfor %}
+            </div>
+            {% endif %}
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    {{ form.username.label_tag }}
+                    {{ form.username }}
+                    {% if form.username.errors %}
+                        <div class="text-danger small">{{ form.username.errors }}</div>
+                    {% endif %}
+                </div>
+                <div class="col-md-6 mb-3">
+                    {{ form.email.label_tag }}
+                    {{ form.email }}
+                    {% if form.email.errors %}
+                        <div class="text-danger small">{{ form.email.errors }}</div>
+                    {% endif %}
+                    <small class="text-muted">Необязательно</small>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    {{ form.password1.label_tag }}
+                    {{ form.password1 }}
+                    {% if form.password1.errors %}
+                        <div class="text-danger small">{{ form.password1.errors }}</div>
+                    {% endif %}
+                </div>
+                <div class="col-md-6 mb-3">
+                    {{ form.password2.label_tag }}
+                    {{ form.password2 }}
+                    {% if form.password2.errors %}
+                        <div class="text-danger small">{{ form.password2.errors }}</div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                {{ form.role.label_tag }}
+                {{ form.role }}
+                {% if form.role.errors %}
+                    <div class="text-danger small">{{ form.role.errors }}</div>
+                {% endif %}
+            </div>
+            
+            <button type="submit" class="btn btn-success">Создать аккаунт и пригласить</button>
+            <a href="{% url 'family_members' %}" class="btn btn-secondary">Отмена</a>
+        </form>
+    </div>
+</div>
+
+<div class="alert alert-warning mt-4">
+    <h6>⚠️ Важно:</h6>
+    <ul class="mb-0 small">
+        <li>Сообщите новому участнику его логин и пароль</li>
+        <li>После первого входа он сможет сменить пароль в настройках</li>
+        <li>Вы в любой момент можете изменить его роль или удалить из семьи</li>
+    </ul>
+</div>
+{% endblock %}

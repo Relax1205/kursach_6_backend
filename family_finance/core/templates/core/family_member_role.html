@@ -1,0 +1,43 @@
+<!-- core/templates/core/family_member_role.html -->
+{% extends 'core/base.html' %}
+{% block content %}
+<h2>✏️ Изменение роли</h2>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <p class="mb-1"><strong>Семья:</strong> {{ family.name }}</p>
+        <p class="mb-3"><strong>Пользователь:</strong> {{ member.user.username }}</p>
+        <p class="mb-3"><strong>Текущая роль:</strong> 
+            {% if current_role == 'head' %}
+                <span class="badge bg-danger">Глава семьи</span>
+            {% elif current_role == 'member' %}
+                <span class="badge bg-success">Член семьи</span>
+            {% else %}
+                <span class="badge bg-secondary">Наблюдатель</span>
+            {% endif %}
+        </p>
+        
+        <form method="post">
+            {% csrf_token %}
+            <div class="mb-3">
+                {{ form.role.label_tag }}
+                {{ form.role }}
+                {% if form.role.errors %}
+                    <div class="text-danger small mt-1">{{ form.role.errors }}</div>
+                {% endif %}
+            </div>
+            <button type="submit" class="btn btn-primary">Сохранить изменения</button>
+            <a href="{% url 'family_members' %}" class="btn btn-secondary">Отмена</a>
+        </form>
+    </div>
+</div>
+
+<div class="alert alert-info">
+    <h6>📋 Описание ролей:</h6>
+    <ul class="mb-0 small">
+        <li><strong>Глава семьи</strong> — полные права: управление бюджетами, участниками, импорт/экспорт</li>
+        <li><strong>Член семьи</strong> — может добавлять транзакции и бюджеты, импортировать данные</li>
+        <li><strong>Наблюдатель</strong> — только просмотр транзакций и отчётов</li>
+    </ul>
+</div>
+{% endblock %}

@@ -1,18 +1,60 @@
 <!-- core/templates/registration/login.html -->
 {% extends 'core/base.html' %}
-
 {% block content %}
-<h2>Вход в систему</h2>
-
-<form method="post">
-    {% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit" class="btn btn-primary">Войти</button>
-</form>
+<div class="row justify-content-center">
+    <div class="col-md-5 col-lg-4">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white text-center">
+                <h4 class="mb-0">🔐 Вход в систему</h4>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    {% if form.errors %}
+                    <div class="alert alert-danger">
+                        <p class="mb-0">Неверный логин или пароль.</p>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="mb-3">
+                        <label for="id_username" class="form-label">Username</label>
+                        <input type="text" name="username" id="id_username" class="form-control" placeholder="Введите логин" required autofocus>
+                        {% if form.username.errors %}
+                            <div class="text-danger small">{{ form.username.errors }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="id_password" class="form-label">Пароль</label>
+                        <input type="password" name="password" id="id_password" class="form-control" placeholder="Введите пароль" required>
+                        {% if form.password.errors %}
+                            <div class="text-danger small">{{ form.password.errors }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary w-100">Войти</button>
+                </form>
+                
+                <hr>
+                <div class="text-center">
+                    <p class="mb-2">
+                        Нет аккаунта? <a href="{% url 'register' %}">Зарегистрироваться</a>
+                    </p>
+                    <small class="text-muted">
+                        Или обратитесь к главе семьи для создания аккаунта
+                    </small>
+                </div>
+            </div>
+        </div>
+        
+        <div class="alert alert-info mt-3">
+            <strong>💡 Совет:</strong> После входа вы сможете создать новую семью или присоединиться к существующей.
+        </div>
+    </div>
+</div>
 
 {% if next %}
-    <input type="hidden" name="next" value="{{ next }}" />
+<input type="hidden" name="next" value="{{ next }}" />
 {% endif %}
-
-<p>Нет аккаунта? <a href="{% url 'admin:index' %}">Создайте суперпользователя через команду `createsuperuser`</a>.</p>
 {% endblock %}
