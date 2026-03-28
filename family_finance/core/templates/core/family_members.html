@@ -3,41 +3,48 @@
 {% block content %}
 <h2>👥 Участники семьи "{{ family.name }}"</h2>
 
+<!-- ✅ Форма добавления доступна ТОЛЬКО главе семьи -->
 {% if is_head %}
-    <div class="card mb-4">
-        <div class="card-header">➕ Добавить участника</div>
-        <div class="card-body">
-            <form method="post">
-                {% csrf_token %}
-                <div class="row">
-                    <div class="col-md-5">
-                        {{ form.username.label_tag }}
-                        {{ form.username }}
-                        {% if form.username.errors %}
-                            <div class="text-danger small">{{ form.username.errors }}</div>
-                        {% endif %}
-                    </div>
-                    <div class="col-md-4">
-                        {{ form.role.label_tag }}
-                        {{ form.role }}
-                        {% if form.role.errors %}
-                            <div class="text-danger small">{{ form.role.errors }}</div>
-                        {% endif %}
-                    </div>
-                    <div class="col-md-3 d-flex align-items-end">
-                        <button type="submit" class="btn btn-success w-100">Добавить</button>
-                    </div>
+<div class="card mb-4">
+    <div class="card-header">➕ Добавить участника</div>
+    <div class="card-body">
+        <form method="post">
+            {% csrf_token %}
+            <div class="row">
+                <div class="col-md-5">
+                    {{ form.username.label_tag }}
+                    {{ form.username }}
+                    {% if form.username.errors %}
+                    <div class="text-danger small">{{ form.username.errors }}</div>
+                    {% endif %}
                 </div>
-            </form>
-            <hr>
-            <a href="{% url 'family_invite' %}" class="btn btn-outline-primary btn-sm">
-                ✉️ Создать аккаунт и пригласить
-            </a>
-        </div>
+                <div class="col-md-4">
+                    {{ form.role.label_tag }}
+                    {{ form.role }}
+                    {% if form.role.errors %}
+                    <div class="text-danger small">{{ form.role.errors }}</div>
+                    {% endif %}
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <button type="submit" class="btn btn-success w-100">Добавить</button>
+                </div>
+            </div>
+        </form>
+        <hr>
+        <a href="{% url 'family_invite' %}" class="btn btn-outline-primary btn-sm">
+            ✉️ Создать аккаунт и пригласить
+        </a>
     </div>
+</div>
+{% else %}
+<!-- ✅ Обычные члены семьи видят только список -->
+<div class="alert alert-info">
+    ℹ️ Вы просматриваете список участников семьи. 
+    Для добавления новых участников обратитесь к главе семьи.
+</div>
 {% endif %}
 
-<!-- Список участников -->
+<!-- ✅ Список участников видят ВСЕ -->
 <div class="card">
     <div class="card-header">📋 Список участников</div>
     <div class="card-body">
@@ -48,7 +55,7 @@
                     <th>Роль</th>
                     <th>Дата вступления</th>
                     {% if is_head %}
-                        <th>Действия</th>
+                    <th>Действия</th>
                     {% endif %}
                 </tr>
             </thead>
@@ -59,16 +66,16 @@
                     <td>
                         <strong>{{ member.user.username }}</strong>
                         {% if member.is_head %}
-                            <span class="badge bg-danger ms-2">Глава</span>
+                        <span class="badge bg-danger ms-2">Глава</span>
                         {% endif %}
                     </td>
                     <td>
                         {% if role == 'head' %}
-                            <span class="badge bg-danger">Глава семьи</span>
+                        <span class="badge bg-danger">Глава семьи</span>
                         {% elif role == 'member' %}
-                            <span class="badge bg-success">Член семьи</span>
+                        <span class="badge bg-success">Член семьи</span>
                         {% else %}
-                            <span class="badge bg-secondary">Наблюдатель</span>
+                        <span class="badge bg-secondary">Наблюдатель</span>
                         {% endif %}
                     </td>
                     <td>{{ member.joined_at|date:"d.m.Y H:i" }}</td>
@@ -90,6 +97,5 @@
         </table>
     </div>
 </div>
-
 <a href="{% url 'family_dashboard' %}" class="btn btn-secondary mt-3">← Назад к панели</a>
 {% endblock %}

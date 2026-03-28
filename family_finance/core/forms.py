@@ -97,9 +97,11 @@ class FamilyMemberFilterForm(forms.Form):
         label='Пользователь',
         choices=[],
         required=False,
-        widget=forms.Select(attrs={'class': 'form-control'})
+        widget=forms.Select(attrs={
+            'class': 'form-select form-select-sm'  # ✅ Исправлено: form-select вместо form-control
+        })
     )
-
+    
     def __init__(self, *args, **kwargs):
         user = kwargs.pop('user')
         super().__init__(*args, **kwargs)
@@ -108,11 +110,11 @@ class FamilyMemberFilterForm(forms.Form):
             family_member = FamilyMember.objects.get(user=user)
             family = family_member.family
             for member in family.members.select_related('user').order_by('user__username'):
-                choices.append((member.user.id, member.user.username))
+                choices.append((str(member.user.id), member.user.username))
         except FamilyMember.DoesNotExist:
             pass
         self.fields['member'].choices = choices
-
+        
 # === ФОРМЫ ДЛЯ УПРАВЛЕНИЯ СЕМЬЕЙ ===
 
 class FamilyCreateForm(forms.ModelForm):
