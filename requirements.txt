@@ -1,3 +1,16 @@
 Django>=4.2,<5.0
 python-dateutil
 django-environ
+
+pytest>=7.4.0
+pytest-django>=4.5.0
+pytest-cov>=4.1.0
+pytest-env>=1.0.0
+pytest-xdist>=3.3.0
+pytest-lazy-fixture>=0.6.3
+factory-boy>=3.3.0
+faker>=19.0.0
+
+black>=23.0.0
+flake8>=6.0.0 
+isort>=5.12.0

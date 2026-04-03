@@ -86,11 +86,11 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-# Internationalization
-LANGUAGE_CODE = 'ru-ru'  # Изменено на русский язык
-TIME_ZONE = 'Europe/Moscow'  # Изменено на московское время
-USE_I18N = True
-USE_TZ = True
+import sys
+IS_TESTING = 'pytest' in sys.modules or os.environ.get('PYTEST_RUNNING') == '1'
+
+USE_I18N = False if IS_TESTING else env.bool('USE_I18N', default=True)
+USE_L10N = False if IS_TESTING else env.bool('USE_L10N', default=True)
 
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = 'static/'
