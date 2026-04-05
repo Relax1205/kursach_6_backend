@@ -3,8 +3,34 @@ import os
 import pytest
 from decimal import Decimal
 from datetime import date
-from django.contrib.auth.models import User, Group
+from django.contrib.auth.models import User, Group, Permission
 from django.test import Client
+
+_HEAD_CORE_PERMS = [
+    'add_family', 'change_family', 'delete_family', 'view_family',
+    'add_category', 'change_category', 'delete_category', 'view_category',
+    'add_transaction', 'change_transaction', 'delete_transaction', 'view_transaction',
+    'add_budget', 'change_budget', 'delete_budget', 'view_budget',
+    'can_manage_family', 'can_delete_any_transaction', 'can_set_budget', 'can_import_export',
+]
+_MEMBER_CORE_PERMS = [
+    'add_transaction', 'view_transaction', 'view_category',
+    'add_budget', 'view_budget', 'can_import_export',
+]
+_VIEWER_CORE_PERMS = [
+    'view_transaction', 'view_category', 'view_budget', 'can_view_family_reports',
+]
+
+
+def _grant_core_permissions(user, codenames):
+    perms = list(
+        Permission.objects.filter(
+            content_type__app_label='core',
+            codename__in=codenames,
+        )
+    )
+    if perms:
+        user.user_permissions.add(*perms)
 
 # Добавляем проект в PYTHONPATH
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'family_finance.settings')
@@ -38,8 +64,9 @@ def family_head(family, db):
     try:
         g = Group.objects.get(name='Глава семьи')
         u.groups.add(g)
-        u.user_permissions.add(*g.permissions.all())
-    except Group.DoesNotExist: pass
+    except Group.DoesNotExist:
+        pass
+    _grant_core_permissions(u, _HEAD_CORE_PERMS)
     return u
 
 @pytest.fixture
@@ -55,8 +82,9 @@ def family_member(family, db):
     try:
         g = Group.objects.get(name='Член семьи')
         u.groups.add(g)
-        u.user_permissions.add(*g.permissions.all())
-    except Group.DoesNotExist: pass
+    except Group.DoesNotExist:
+        pass
+    _grant_core_permissions(u, _MEMBER_CORE_PERMS)
     return u
 
 @pytest.fixture
@@ -72,8 +100,9 @@ def viewer_user(family, db):
     try:
         g = Group.objects.get(name='Наблюдатель')
         u.groups.add(g)
-        u.user_permissions.add(*g.permissions.all())
-    except Group.DoesNotExist: pass
+    except Group.DoesNotExist:
+        pass
+    _grant_core_permissions(u, _VIEWER_CORE_PERMS)
     return u
 
 @pytest.fixture
@@ -140,3 +169,13 @@ def full_family_setup(family, family_head, family_member, expense_category, inco
         'expense_category': expense_category, 'income_category': income_category,
         'budget': budget, 'transactions': transactions_batch
     }
+
+def pytest_configure(config):
+    """
+    Выполняется при инициализации pytest.
+    Переопределяет настройки Django для тестовой среды.
+    """
+    from django.conf import settings
+    settings.USE_I18N = False
+    settings.USE_L10N = False
+    settings.LANGUAGE_CODE = 'en'

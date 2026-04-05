@@ -1,7 +1,3 @@
-# core/services.py
-"""
-Модуль бизнес-логики приложения управления финансами.
-"""
 import csv
 from decimal import Decimal
 from datetime import date
@@ -11,7 +7,6 @@ from .models import Transaction, Category, Budget, FamilyMember
 from dateutil.relativedelta import relativedelta
 
 def get_monthly_summary(user=None, family=None, year=None, month=None):
-    """Возвращает сводку по доходам и расходам за указанный месяц."""
     start_date = date(year, month, 1)
     if month == 12:
         end_date = date(year + 1, 1, 1)
@@ -41,7 +36,6 @@ def get_monthly_summary(user=None, family=None, year=None, month=None):
     }
 
 def get_expense_breakdown_by_category(user=None, family=None, year=None, month=None):
-    """Возвращает детализацию расходов по категориям за месяц."""
     start_date = date(year, month, 1)
     if month == 12:
         end_date = date(year + 1, 1, 1)
@@ -65,7 +59,6 @@ def get_expense_breakdown_by_category(user=None, family=None, year=None, month=N
     )
 
 def export_transactions_to_csv(response, user, family=None):
-    """Экспортирует транзакции в CSV-файл."""
     writer = csv.writer(response)
     writer.writerow(['Дата', 'Пользователь', 'Тип', 'Категория', 'Сумма', 'Описание'])
     if family:
@@ -84,7 +77,6 @@ def export_transactions_to_csv(response, user, family=None):
         ])
 
 def get_budget_vs_actual(user=None, family=None, year=None, month=None):
-    """Сравнивает установленные бюджеты с фактическими расходами за месяц."""
     start_date = date(year, month, 1)
     end_date = start_date + relativedelta(months=1) - relativedelta(days=1)
 
@@ -113,10 +105,6 @@ def get_budget_vs_actual(user=None, family=None, year=None, month=None):
     return result
 
 def get_budget_status(category, user=None, family=None, date=None):
-    """
-    Проверяет статус бюджета для категории.
-    Возвращает словарь с информацией о бюджете и предупреждениями.
-    """
     if date is None:
         date = date.today()
     
@@ -140,7 +128,6 @@ def get_budget_status(category, user=None, family=None, date=None):
     if not budget:
         return {'has_budget': False}
 
-    # Считаем расходы за месяц
     if date.month == 12:
         month_end = date.replace(year=date.year+1, month=1, day=1) - relativedelta(days=1)
     else:
@@ -158,10 +145,10 @@ def get_budget_status(category, user=None, family=None, date=None):
     warning_type = 'info'
 
     if percent_used >= 100:
-        warning = f"⛔ Бюджет '{category.name}' превышен на {abs(remaining):.2f} ₽!"
+        warning = f"Бюджет '{category.name}' превышен на {abs(remaining):.2f} ₽!"
         warning_type = 'danger'
     elif percent_used >= 80:
-        warning = f"⚠️ Внимание! Бюджет '{category.name}' использован на {percent_used:.0f}%. Осталось {remaining:.2f} ₽."
+        warning = f"Внимание! Бюджет '{category.name}' использован на {percent_used:.0f}%. Осталось {remaining:.2f} ₽."
         warning_type = 'warning'
 
     return {
@@ -175,7 +162,6 @@ def get_budget_status(category, user=None, family=None, date=None):
     }
 
 def import_transactions_from_csv(file, user):
-    """Импортирует транзакции из CSV-файла."""
     from io import StringIO
     content = file.read().decode('utf-8')
     reader = csv.reader(StringIO(content))

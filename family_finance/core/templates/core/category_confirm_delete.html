@@ -1,0 +1,15 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<h2>🗑 Удаление категории</h2>
+<div class="alert alert-warning">
+    <h5>Вы уверены, что хотите удалить эту категорию?</h5>
+    <p class="mb-1"><strong>Название:</strong> {{ category.name }}</p>
+    <p class="mb-1"><strong>Тип:</strong> {{ category.get_type_display }}</p>
+    <p class="mb-0"><strong>Семья:</strong> {{ category.family.name|default:"Личная" }}</p>
+</div>
+<form method="post">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-danger">Да, удалить</button>
+    <a href="{% url 'transaction_create' %}" class="btn btn-secondary">Отмена</a>
+</form>
+{% endblock %}

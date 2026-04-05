@@ -20,17 +20,22 @@ class TestMonthlySummary:
 
 @pytest.mark.django_db
 class TestBudgetStatus:
-    def test_over_budget(self, family, expense_category, budget):
-        Transaction.objects.create(user=family.members.first().user, category=expense_category, amount=12000, date=date(2025, 10, 10))
+    def test_over_budget(self, family, expense_category, budget, family_head):
+        Transaction.objects.create(
+            user=family_head, category=expense_category, amount=12000, date=date(2025, 10, 10)
+        )
         status = get_budget_status(expense_category, family=family, date=date(2025, 10, 20))
         assert status['percent_used'] == 120
         assert status['warning_type'] == 'danger'
 
 @pytest.mark.django_db
 class TestCSVServices:
-    def test_export_structure(self, user, transactions_batch):
+    def test_export_structure(self, family, transactions_batch):
+        from django.contrib.auth.models import User
+
+        u = User.objects.get(username='batch_head')
         out = StringIO()
-        export_transactions_to_csv(out, user, family=None)
+        export_transactions_to_csv(out, u, family=family)
         out.seek(0)
         lines = out.readlines()
         assert 'Дата,Пользователь,Тип,Категория,Сумма,Описание' in lines[0]

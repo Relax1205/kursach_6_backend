@@ -4,12 +4,6 @@ from django.contrib.auth.models import Group, Permission
 from .models import Family, FamilyMember, Category, Transaction, Budget
 
 def create_default_groups():
-    """
-    Создаёт стандартные группы прав.
-    Вызывается ТОЛЬКО через миграцию или management command.
-    НЕ вызывать при импорте модуля!
-    """
-    # 1. Глава семьи (ЕСТЬ право на бюджет)
     head_group, _ = Group.objects.get_or_create(name='Глава семьи')
     head_group.permissions.clear()
     head_group.permissions.add(
@@ -25,7 +19,6 @@ def create_default_groups():
         )
     )
     
-    # 2. Член семьи (ЕСТЬ право на бюджет)
     member_group, _ = Group.objects.get_or_create(name='Член семьи')
     member_group.permissions.clear()
     member_group.permissions.add(
@@ -38,7 +31,6 @@ def create_default_groups():
         )
     )
     
-    # 3. Наблюдатель (НЕТ права на бюджет!)
     viewer_group, _ = Group.objects.get_or_create(name='Наблюдатель')
     viewer_group.permissions.clear()
     viewer_group.permissions.add(
@@ -50,8 +42,6 @@ def create_default_groups():
         )
     )
 
-# ✅ УДАЛЕНО: try/except блок с вызовом create_default_groups()
-# Теперь группы создаются только через миграцию
 
 @admin.register(Family)
 class FamilyAdmin(admin.ModelAdmin):
@@ -76,6 +66,6 @@ class TransactionAdmin(admin.ModelAdmin):
     search_fields = ['description', 'user__username']
 
 @admin.register(Budget)
-class BudgetAdmin(admin.ModelAdmin):  # ✅ Исправлено: было MainAdmin
+class BudgetAdmin(admin.ModelAdmin):
     list_display = ['family', 'category', 'amount', 'month']
     list_filter = ['family', 'month']

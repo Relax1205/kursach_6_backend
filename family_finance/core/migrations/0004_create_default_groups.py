@@ -1,15 +1,11 @@
 # Generated manually for creating default permission groups
+
 from django.db import migrations
 
 def create_default_groups(apps, schema_editor):
-    """
-    Создаёт стандартные группы прав при применении миграции.
-    Использует apps.get_model() для совместимости с миграциями.
-    """
     Group = apps.get_model('auth', 'Group')
     Permission = apps.get_model('auth', 'Permission')
     
-    # 1. Глава семьи (полные права)
     head_group, _ = Group.objects.get_or_create(name='Глава семьи')
     head_permissions = Permission.objects.filter(
         content_type__app_label='core',
@@ -23,7 +19,6 @@ def create_default_groups(apps, schema_editor):
     )
     head_group.permissions.set(head_permissions)
     
-    # 2. Член семьи (может добавлять транзакции и бюджеты)
     member_group, _ = Group.objects.get_or_create(name='Член семьи')
     member_permissions = Permission.objects.filter(
         content_type__app_label='core',
@@ -34,7 +29,6 @@ def create_default_groups(apps, schema_editor):
     )
     member_group.permissions.set(member_permissions)
     
-    # 3. Наблюдатель (только просмотр)
     viewer_group, _ = Group.objects.get_or_create(name='Наблюдатель')
     viewer_permissions = Permission.objects.filter(
         content_type__app_label='core',
@@ -45,9 +39,6 @@ def create_default_groups(apps, schema_editor):
     viewer_group.permissions.set(viewer_permissions)
 
 def remove_default_groups(apps, schema_editor):
-    """
-    Удаляет группы при откате миграции (для безопасности).
-    """
     Group = apps.get_model('auth', 'Group')
     Group.objects.filter(name__in=['Глава семьи', 'Член семьи', 'Наблюдатель']).delete()
 

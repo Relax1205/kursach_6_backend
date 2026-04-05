@@ -1,7 +1,7 @@
 import pytest
 from django.urls import reverse
-from decimal import Decimal
-from datetime import date
+
+from core.models import FamilyMember
 
 @pytest.mark.django_db
 class TestAuthViews:
@@ -21,8 +21,8 @@ class TestFamilyViews:
     def test_create_family(self, authenticated_client, user):
         resp = authenticated_client.post(reverse('family_create'), {'name': 'Петровы'})
         assert resp.status_code == 302
-        assert user.familymember_set.exists()
-        assert user.familymember_set.first().is_head is True
+        assert FamilyMember.objects.filter(user=user).exists()
+        assert FamilyMember.objects.get(user=user).is_head is True
 
     def test_leave_family_member(self, member_client, family_member):
         resp = member_client.post(reverse('family_leave'))
@@ -32,9 +32,10 @@ class TestFamilyViews:
 @pytest.mark.django_db
 class TestTransactionViews:
     def test_list_pagination(self, head_client, transactions_batch):
-        resp = head_client.get(reverse('transaction_list'), {'per_page': '5'})
+        # Допустимые значения: 10, 20, 50, 100 (остальное сбрасывается на 20)
+        resp = head_client.get(reverse('transaction_list'), {'per_page': '10'})
         assert resp.status_code == 200
-        assert len(resp.context['page_obj']) == 5
+        assert len(resp.context['page_obj']) == 10
 
     def test_create_with_budget_warning(self, head_client, expense_category, budget):
         # Создаём транзакцию, превышающую бюджет

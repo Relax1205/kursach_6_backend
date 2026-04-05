@@ -3,7 +3,6 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 
 class Family(models.Model):
-    """Семья/Домохозяйство для объединения пользователей."""
     name = models.CharField('Название семьи', max_length=100, default='Моя семья')
     created_at = models.DateTimeField(default=timezone.now)
     
@@ -19,7 +18,6 @@ class Family(models.Model):
         return self.name
 
 class FamilyMember(models.Model):
-    """Связь пользователя с семьей."""
     user = models.OneToOneField(User, on_delete=models.CASCADE, verbose_name='Пользователь')
     family = models.ForeignKey(Family, on_delete=models.CASCADE, verbose_name='Семья', related_name='members')
     joined_at = models.DateTimeField(default=timezone.now)
@@ -33,7 +31,6 @@ class FamilyMember(models.Model):
         return f"{self.user.username} ({self.family.name})"
 
 class Category(models.Model):
-    """Категория дохода или расхода."""
     INCOME = 'income'
     EXPENSE = 'expense'
     TYPE_CHOICES = [
@@ -54,7 +51,6 @@ class Category(models.Model):
         return f"{self.name} ({self.get_type_display()})"
 
 class Transaction(models.Model):
-    """Финансовая транзакция: доход или расход."""
     user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='Пользователь')
     amount = models.DecimalField('Сумма', max_digits=12, decimal_places=2)
     category = models.ForeignKey(Category, on_delete=models.PROTECT, verbose_name='Категория')
@@ -75,7 +71,6 @@ class Transaction(models.Model):
         return f"{self.category} — {self.amount} ({self.user.username}, {self.date})"
 
 class Budget(models.Model):
-    """Ежемесячный бюджет по категории."""
     family = models.ForeignKey(Family, on_delete=models.CASCADE, verbose_name='Семья', related_name='budgets', null=True, blank=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='Пользователь', null=True, blank=True)
     category = models.ForeignKey(Category, on_delete=models.CASCADE)

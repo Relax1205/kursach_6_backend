@@ -6,18 +6,14 @@
 <div class="alert alert-warning">
     <h4>Доступ ограничен</h4>
     <p>У вас нет прав на управление бюджетами.</p>
-    <p>Эта функция доступна только для <strong>Главы семьи</strong>
+    <p>Эта функция доступна только для <strong>Главы семьи</strong>.</p>
 </div>
 {% else %}
-
-<!-- Форма добавления бюджета -->
 <div class="card mb-4">
     <div class="card-header">Установить бюджет на месяц</div>
     <div class="card-body">
         <form method="post">
             {% csrf_token %}
-            
-            <!-- Отображение ошибок формы -->
             {% if form.non_field_errors %}
             <div class="alert alert-danger">
                 {% for error in form.non_field_errors %}
@@ -25,7 +21,6 @@
                 {% endfor %}
             </div>
             {% endif %}
-            
             <div class="row">
                 <div class="col-md-4">
                     {{ form.category.label_tag }}
@@ -57,7 +52,6 @@
     </div>
 </div>
 
-<!-- Список бюджетов -->
 {% if budgets %}
 <h3>Текущие бюджеты</h3>
 <table class="table table-striped">
@@ -66,6 +60,7 @@
             <th>Месяц</th>
             <th>Категория</th>
             <th>Лимит</th>
+            <th>Действия</th>
         </tr>
     </thead>
     <tbody>
@@ -74,17 +69,22 @@
             <td>{{ budget.month|date:"Y-m" }}</td>
             <td>{{ budget.category.name }}</td>
             <td><strong>{{ budget.amount }} ₽</strong></td>
+            <td>
+                <a href="{% url 'budget_delete' pk=budget.pk %}" 
+                   class="btn btn-sm btn-outline-danger">
+                   🗑 Удалить
+                </a>
+            </td>
         </tr>
         {% endfor %}
     </tbody>
 </table>
 {% else %}
 <div class="alert alert-secondary">
-    ℹ️ Бюджеты еще не установлены на текущий или прошлый месяц.
+    Бюджеты еще не установлены на текущий или прошлый месяц.
 </div>
 {% endif %}
-
 {% endif %}
 
-<a href="{% url 'transaction_list' %}" class="btn btn-secondary">← Назад к транзакциям</a>
+<a href="{% url 'transaction_list' %}" class="btn btn-secondary">Назад к транзакциям</a>
 {% endblock %}

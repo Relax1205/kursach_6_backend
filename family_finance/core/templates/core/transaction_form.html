@@ -1,25 +1,70 @@
-<!-- core/templates/core/transaction_form.html -->
 {% extends 'core/base.html' %}
 {% block content %}
 <h2>{{ title }}</h2>
-<form method="post">
-    {% csrf_token %}
-    <div class="mb-3">
-        {{ form.non_field_errors }}
-        {% for field in form %}
-            <div class="mb-3">
-                {{ field.label_tag }}
-                {{ field }}
-                {% if field.help_text %}
-                    <small class="form-text text-muted">{{ field.help_text }}</small>
-                {% endif %}
-                {% for error in field.errors %}
-                    <div class="text-danger">{{ error }}</div>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="post">
+            {% csrf_token %}
+            
+            {% if form.non_field_errors %}
+            <div class="alert alert-danger">
+                {% for error in form.non_field_errors %}
+                    <p class="mb-0">{{ error }}</p>
                 {% endfor %}
             </div>
-        {% endfor %}
+            {% endif %}
+    
+            <div class="row g-3">
+                {% for field in form %}
+                <div class="col-md-4">
+                    {{ field.label_tag }}
+                    {{ field }}
+                    {% if field.errors %}
+                        <div class="text-danger small mt-1">{{ field.errors }}</div>
+                    {% endif %}
+                    {% if field.help_text %}
+                        <small class="form-text text-muted">{{ field.help_text }}</small>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="mt-4 d-flex gap-2">
+                <button type="submit" class="btn btn-primary">Сохранить</button>
+                <a href="{% url 'transaction_list' %}" class="btn btn-secondary">Назад к транзакциям</a>
+            </div>
+        </form>
     </div>
-    <button type="submit" class="btn btn-success">Сохранить</button>
-    <a href="{% url 'transaction_list' %}" class="btn btn-secondary">Отмена</a>
-</form>
+</div>
+
+{% if categories %}
+<div class="card">
+    <div class="card-header bg-light fw-bold">Ваши категории</div>
+    <div class="card-body p-0">
+        <ul class="list-group list-group-flush">
+            {% for cat in categories %}
+            <li class="list-group-item d-flex justify-content-between align-items-center py-3">
+                <div>
+                    <strong>{{ cat.name }}</strong>
+                    <span class="badge {% if cat.type == 'income' %}bg-success{% else %}bg-danger{% endif %} ms-2">
+                        {{ cat.get_type_display }}
+                    </span>
+                </div>
+                
+                <a href="{% url 'category_delete' pk=cat.pk %}"
+                   class="btn btn-sm btn-outline-danger"
+                   title="Удалить категорию">
+                    🗑 Удалить
+                </a>
+                
+            </li>
+            {% endfor %}
+        </ul>
+        <div class="p-3 bg-light border-top text-muted small">
+            <strong>Примечание:</strong> Категорию можно удалить, только если к ней не привязаны транзакции.
+        </div>
+    </div>
+</div>
+{% endif %}
 {% endblock %}

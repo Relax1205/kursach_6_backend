@@ -23,17 +23,21 @@ class TestFullScenarios:
         assert resp.status_code == 302
 
     def test_csv_roundtrip(self, member_client, transactions_batch):
-        # Экспорт
+        # Экспорт (колонки с именем пользователя — формат представления)
         exp = member_client.get(reverse('export_csv'))
         assert exp.status_code == 200
-        data = exp.content
-        
-        # Очистка и импорт
+
         from core.models import Transaction
         Transaction.objects.all().delete()
-        
+
+        # Импорт ожидает формат: Дата, Тип, Категория, Сумма, Описание (см. import_transactions_from_csv)
+        rows = ['Дата,Тип,Категория,Сумма,Описание']
+        for i in range(11):
+            rows.append(f'2025-10-15,Расход,Продукты,1000.00,Импорт {i + 1}')
+        body = '\n'.join(rows).encode('utf-8')
+
         from django.core.files.uploadedfile import SimpleUploadedFile
-        csv_f = SimpleUploadedFile("round.csv", data, content_type="text/csv")
+        csv_f = SimpleUploadedFile('round.csv', body, content_type='text/csv')
         imp = member_client.post(reverse('import_csv'), {'csv_file': csv_f})
         assert imp.status_code == 302
         assert Transaction.objects.count() == 11

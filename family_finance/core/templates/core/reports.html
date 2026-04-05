@@ -1,10 +1,8 @@
-<!-- core/templates/core/reports.html -->
 {% extends 'core/base.html' %}
 {% block content %}
 <h2>Финансовые отчёты</h2>
 <h3>{{ current_month }}</h3>
 
-<!-- Сводка -->
 <div class="row mb-4">
     <div class="col-md-4">
         <div class="card text-white bg-success">
@@ -32,7 +30,6 @@
     </div>
 </div>
 
-<!-- Сравнение с бюджетом -->
 {% if budget_comparison %}
 <h3>Сравнение с бюджетом</h3>
 <table class="table table-striped">
@@ -60,9 +57,9 @@
             </td>
             <td>
                 {% if item.is_over_budget %}
-                <span class="badge bg-danger">⚠ Превышен</span>
+                <span class="badge bg-danger">Превышен</span>
                 {% else %}
-                <span class="badge bg-success">✓ В норме</span>
+                <span class="badge bg-success">В норме</span>
                 {% endif %}
             </td>
         </tr>
@@ -71,24 +68,20 @@
 </table>
 {% endif %}
 
-<!-- Расходы по категориям с диаграммой Chart.js -->
 {% if expense_data %}
-<h3 class="mt-4">📊 Расходы по категориям</h3>
+<h3 class="mt-4">Расходы по категориям</h3>
 
-<!-- Контейнер для графика -->
 <div class="card mb-4">
     <div class="card-body">
         <canvas id="expenseChart" height="120"></canvas>
     </div>
 </div>
 
-<!-- Подключаем Chart.js через CDN -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const ctx = document.getElementById('expenseChart').getContext('2d');
     
-    // Данные из Django-контекста (используем |safe для корректного парсинга списков)
     const labels = {{ labels|safe }};
     const values = {{ values|safe }};
     
@@ -99,7 +92,7 @@ document.addEventListener('DOMContentLoaded', function() {
     ];
     
     new Chart(ctx, {
-        type: 'doughnut',  // Тип графика: 'doughnut', 'pie' или 'bar'
+        type: 'doughnut',
         data: {
             labels: labels,
             datasets: [{
@@ -137,7 +130,6 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
-<!-- Текстовая таблица для наглядности -->
 <div class="table-responsive">
     <table class="table table-bordered table-sm">
         <thead class="table-light">
@@ -170,11 +162,10 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 {% else %}
 <div class="alert alert-secondary">
-    ℹ️ В этом месяце ещё нет расходов для визуализации.
+    В этом месяце ещё нет расходов для визуализации.
 </div>
 {% endif %}
 
-<!-- Топ-5 крупнейших расходов -->
 {% if expense_data %}
 <h3 class="mt-4">Топ-5 категорий по расходам</h3>
 <ol class="list-group list-group-numbered">
@@ -187,5 +178,5 @@ document.addEventListener('DOMContentLoaded', function() {
 </ol>
 {% endif %}
 
-<a href="{% url 'transaction_list' %}" class="btn btn-secondary mt-3">← Назад к транзакциям</a>
+<a href="{% url 'transaction_list' %}" class="btn btn-secondary mt-3">Назад к транзакциям</a>
 {% endblock %}

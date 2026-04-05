@@ -1,0 +1,15 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<h2>🗑 Удаление бюджета</h2>
+<div class="alert alert-warning">
+    <h5>Вы уверены, что хотите удалить этот бюджет?</h5>
+    <p class="mb-1"><strong>Категория:</strong> {{ budget.category.name }}</p>
+    <p class="mb-1"><strong>Месяц:</strong> {{ budget.month|date:"F Y" }}</p>
+    <p class="mb-0"><strong>Лимит:</strong> {{ budget.amount }} ₽</p>
+</div>
+<form method="post">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-danger">Да, удалить</button>
+    <a href="{% url 'budget_list' %}" class="btn btn-secondary">Отмена</a>
+</form>
+{% endblock %}

@@ -36,7 +36,6 @@ class TransactionForm(forms.ModelForm):
         return amount
 
 class CategoryForm(forms.ModelForm):
-    """Форма для создания категории."""
     class Meta:
         model = Category
         fields = ['name', 'type']
@@ -46,7 +45,6 @@ class CategoryForm(forms.ModelForm):
         }
 
 class BudgetForm(forms.ModelForm):
-    """Форма для установки месячного бюджета."""
     month = forms.CharField(
         label='Месяц',
         widget=forms.TextInput(attrs={'type': 'month', 'class': 'form-control'})
@@ -71,7 +69,6 @@ class BudgetForm(forms.ModelForm):
             self.fields['category'].queryset = Category.objects.filter(user=user, type=Category.EXPENSE)
 
     def clean_month(self):
-        """Преобразуем формат YYYY-MM в дату (первое число месяца)."""
         month_value = self.cleaned_data['month']
         if not month_value:
             raise ValidationError('Укажите месяц.')
@@ -92,13 +89,12 @@ class BudgetForm(forms.ModelForm):
         return amount
 
 class FamilyMemberFilterForm(forms.Form):
-    """Форма для фильтрации транзакций по члену семьи."""
     member = forms.ChoiceField(
         label='Пользователь',
         choices=[],
         required=False,
         widget=forms.Select(attrs={
-            'class': 'form-select form-select-sm'  # ✅ Исправлено: form-select вместо form-control
+            'class': 'form-select form-select-sm'
         })
     )
     
@@ -115,10 +111,8 @@ class FamilyMemberFilterForm(forms.Form):
             pass
         self.fields['member'].choices = choices
         
-# === ФОРМЫ ДЛЯ УПРАВЛЕНИЯ СЕМЬЕЙ ===
 
 class FamilyCreateForm(forms.ModelForm):
-    """Форма для создания новой семьи."""
     class Meta:
         model = Family
         fields = ['name']
@@ -127,7 +121,6 @@ class FamilyCreateForm(forms.ModelForm):
         }
 
 class FamilyMemberAddForm(forms.Form):
-    """Форма для добавления/приглашения участника в семью."""
     username = forms.CharField(
         label='Имя пользователя',
         max_length=150,
@@ -172,7 +165,6 @@ class FamilyMemberAddForm(forms.Form):
         return username
 
 class FamilyMemberRoleForm(forms.Form):
-    """Форма для изменения роли участника семьи."""
     role = forms.ChoiceField(
         label='Роль',
         choices=[
@@ -183,10 +175,8 @@ class FamilyMemberRoleForm(forms.Form):
         widget=forms.Select(attrs={'class': 'form-control'})
     )
 
-# === ФОРМЫ РЕГИСТРАЦИИ И ПРИГЛАШЕНИЯ ===
 
 class UserRegistrationForm(UserCreationForm):
-    """Форма регистрации нового пользователя."""
     email = forms.EmailField(
         required=True,
         widget=forms.EmailInput(attrs={'class': 'form-control', 'placeholder': 'email@example.com'})
@@ -220,7 +210,6 @@ class UserRegistrationForm(UserCreationForm):
         return email
 
 class FamilyMemberInviteForm(forms.Form):
-    """Форма для приглашения нового участника семьи (создание аккаунта главой)."""
     username = forms.CharField(
         label='Логин',
         max_length=150,

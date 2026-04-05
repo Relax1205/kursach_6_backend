@@ -23,10 +23,9 @@
             </div>
         </div>
         
-        <!-- Навигация -->
         <nav class="mb-4">
             {% if user.is_authenticated %}
-            <a href="{% url 'family_dashboard' %}" class="btn btn-outline-primary">🏠 Главная</a>
+            <a href="{% url 'family_dashboard' %}" class="btn btn-outline-primary">Главная</a>
             <a href="{% url 'transaction_list' %}" class="btn btn-outline-primary">Транзакции</a>
             <a href="{% url 'transaction_create' %}" class="btn btn-success">+ Транзакция</a>
             <a href="{% url 'category_create' %}" class="btn btn-secondary">+ Категория</a>
@@ -34,7 +33,7 @@
             <a href="{% url 'reports' %}" class="btn btn-warning">Отчёты</a>
             
             {% if is_family %}
-            <a href="{% url 'family_members' %}" class="btn btn-outline-dark">👥 Семья</a>
+            <a href="{% url 'family_members' %}" class="btn btn-outline-dark">Семья</a>
             {% endif %}
             
             <a href="{% url 'export_csv' %}" class="btn btn-outline-dark">Экспорт CSV</a>
@@ -50,7 +49,6 @@
             {% endif %}
         </nav>
         
-        <!-- Сообщения -->
         {% if messages %}
         {% for message in messages %}
         {% if message.tags == 'warning' %}
@@ -72,7 +70,6 @@
         {% endfor %}
         {% endif %}
         
-        <!-- Основной контент -->
         {% block content %}
         {% endblock %}
     </div>

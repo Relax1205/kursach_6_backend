@@ -1,11 +1,6 @@
-# core/context_processors.py
 from .models import FamilyMember
 
 def family_context(request):
-    """
-    Добавляет информацию о семье в контекст всех шаблонов.
-    Доступно даже если пользователь не авторизован.
-    """
     if not request.user.is_authenticated:
         return {
             'is_family': False,
