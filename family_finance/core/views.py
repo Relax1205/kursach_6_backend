@@ -587,8 +587,7 @@ def export_csv(request):
         transactions = Transaction.objects.filter(
             user=request.user
         ).select_related('category')
-    
-    # Проверка наличия транзакций
+
     if not transactions.exists():
         messages.warning(request, 'У вас нет транзакций для экспорта. Сначала добавьте данные.')
         return redirect('transaction_list')
