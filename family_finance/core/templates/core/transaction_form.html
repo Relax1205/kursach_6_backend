@@ -52,11 +52,13 @@
                     </span>
                 </div>
                 
+                {% if not is_family or perms.core.delete_category %}
                 <a href="{% url 'category_delete' pk=cat.pk %}"
                    class="btn btn-sm btn-outline-danger"
                    title="Удалить категорию">
                     🗑 Удалить
                 </a>
+                {% endif %}
                 
             </li>
             {% endfor %}

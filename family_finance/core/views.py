@@ -1,79 +1,90 @@
-# core/views.py
-from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
-from django.contrib.auth.decorators import login_required
-from django.db.models import Sum
-from django.utils import timezone
-from datetime import date
 from dateutil.relativedelta import relativedelta
-from django.http import HttpResponse
-import csv
-from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
-from django.contrib.auth.models import User, Group
 from django.contrib.auth import login
-from django.core.exceptions import PermissionDenied
-from .models import Transaction, Category, Budget, FamilyMember, Family
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.models import User
+from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
+
 from .forms import (
-    TransactionForm, CategoryForm, BudgetForm, FamilyMemberFilterForm,
-    FamilyCreateForm, FamilyMemberAddForm, FamilyMemberRoleForm,
-    UserRegistrationForm, FamilyMemberInviteForm
+    BudgetForm,
+    CategoryForm,
+    FamilyCreateForm,
+    FamilyMemberAddForm,
+    FamilyMemberFilterForm,
+    FamilyMemberInviteForm,
+    FamilyMemberRoleForm,
+    TransactionForm,
+    UserRegistrationForm,
+)
+from .models import Budget, Category, Family, FamilyMember, Transaction
+from .roles import (
+    ROLE_HEAD,
+    assign_family_role,
+    clear_family_role_access,
+    get_family_for_user,
+    get_family_member_for_user,
+    get_member_role,
 )
 from .services import (
-    get_monthly_summary,
-    get_expense_breakdown_by_category,
-    get_budget_vs_actual,
     export_transactions_to_csv,
+    get_budget_status,
+    get_budget_vs_actual,
+    get_expense_breakdown_by_category,
+    get_monthly_summary,
     import_transactions_from_csv,
-    get_budget_status
 )
 
+
 def get_user_family(request):
-    try:
-        family_member = FamilyMember.objects.get(user=request.user)
-        return family_member.family
-    except FamilyMember.DoesNotExist:
-        return None
+    return get_family_for_user(request.user)
+
 
 def get_user_family_member(request):
-    try:
-        return FamilyMember.objects.get(user=request.user)
-    except FamilyMember.DoesNotExist:
-        return None
+    return get_family_member_for_user(request.user)
 
 
-def demote_former_family_heads(family, new_head_user):
-    try:
-        head_group = Group.objects.get(name='Глава семьи')
-        viewer_group = Group.objects.get(name='Наблюдатель')
-    except Group.DoesNotExist:
-        return
-    for fm in family.members.select_related('user').exclude(user=new_head_user):
-        u = fm.user
-        if not fm.is_head and not u.groups.filter(pk=head_group.pk).exists():
-            continue
-        u.groups.clear()
-        u.user_permissions.clear()
-        u.groups.add(viewer_group)
-        if fm.is_head:
-            fm.is_head = False
-            fm.save(update_fields=['is_head'])
+def _can_manage_family_reports(user, family):
+    return family is None or user.has_perm('core.can_manage_family') or user.has_perm(
+        'core.can_view_family_reports'
+    )
+
+
+def _can_manage_budgets(user, family):
+    return family is None or user.has_perm('core.can_set_budget')
+
+
+def _can_import_export(user, family):
+    return family is None or user.has_perm('core.can_import_export')
+
+
+def _can_manage_family_categories(user, family, permission_codename):
+    return family is None or user.has_perm(f'core.{permission_codename}')
 
 
 def register_view(request):
     if request.user.is_authenticated:
         return redirect('transaction_list')
+
     if request.method == 'POST':
         form = UserRegistrationForm(request.POST)
         if form.is_valid():
             user = form.save()
             login(request, user)
-            messages.success(request, f'Добро пожаловать, {user.username}! Регистрация успешна.')
+            messages.success(
+                request,
+                f'Добро пожаловать, {user.username}! Регистрация успешна.',
+            )
             return redirect('family_dashboard')
-        else:
-            messages.error(request, 'Исправьте ошибки в форме.')
+        messages.error(request, 'Исправьте ошибки в форме.')
     else:
         form = UserRegistrationForm()
+
     return render(request, 'registration/register.html', {'form': form})
+
 
 @login_required
 def family_invite_member(request):
@@ -81,91 +92,86 @@ def family_invite_member(request):
     if not family or not request.user.has_perm('core.can_manage_family'):
         messages.error(request, 'У вас нет прав на приглашение участников.')
         return redirect('family_members')
+
     if request.method == 'POST':
         form = FamilyMemberInviteForm(request.POST)
         if form.is_valid():
             user = User.objects.create_user(
                 username=form.cleaned_data['username'],
                 email=form.cleaned_data.get('email', ''),
-                password=form.cleaned_data['password1']
+                password=form.cleaned_data['password1'],
             )
             family_member = FamilyMember.objects.create(
                 user=user,
                 family=family,
-                is_head=False
+                is_head=False,
             )
-            role = form.cleaned_data['role']
-            if role == 'member':
-                try:
-                    member_group = Group.objects.get(name='Член семьи')
-                    user.groups.add(member_group)
-                    user.user_permissions.add(*member_group.permissions.all())
-                except Group.DoesNotExist:
-                    pass
-            elif role == 'viewer':
-                try:
-                    viewer_group = Group.objects.get(name='Наблюдатель')
-                    user.groups.add(viewer_group)
-                    user.user_permissions.add(*viewer_group.permissions.all())
-                except Group.DoesNotExist:
-                    pass
-            messages.success(request, f'Пользователь {user.username} успешно добавлен в семью!')
+            assign_family_role(family_member, form.cleaned_data['role'])
+            messages.success(
+                request,
+                f'Пользователь {user.username} успешно добавлен в семью.',
+            )
             return redirect('family_members')
+        messages.error(request, 'Не удалось пригласить участника. Проверьте форму.')
     else:
         form = FamilyMemberInviteForm()
-    return render(request, 'core/family_invite.html', {
-        'form': form,
-        'family': family
-    })
+
+    return render(request, 'core/family_invite.html', {'form': form, 'family': family})
+
 
 @login_required
 def family_dashboard(request):
+    family_member = get_user_family_member(request)
     context = {}
-    if request.user.is_authenticated:
-        try:
-            family_member = FamilyMember.objects.get(user=request.user)
-            family = family_member.family
-            context['members_count'] = family.members.count()
-            context['transactions_count'] = Transaction.objects.filter(
-                user__familymember__family=family
-            ).count()
-            context['budgets_count'] = Budget.objects.filter(
-                family=family,
-                month=date.today().replace(day=1)
-            ).count()
-        except FamilyMember.DoesNotExist:
-            pass
+
+    if family_member:
+        family = family_member.family
+        current_month = timezone.localdate().replace(day=1)
+        context.update(
+            {
+                'members_count': family.members.count(),
+                'transactions_count': Transaction.objects.filter(
+                    user__familymember__family=family
+                ).count(),
+                'budgets_count': Budget.objects.filter(
+                    family=family,
+                    month=current_month,
+                ).count(),
+            }
+        )
+
     return render(request, 'core/family_dashboard.html', context)
+
 
 @login_required
 def family_create(request):
     if get_user_family(request):
         messages.error(request, 'Вы уже состоите в семье. Нельзя создать новую.')
         return redirect('family_dashboard')
+
     if request.method == 'POST':
         form = FamilyCreateForm(request.POST)
         if form.is_valid():
             family = form.save()
-            FamilyMember.objects.create(
+            family_member = FamilyMember.objects.create(
                 user=request.user,
                 family=family,
-                is_head=True
+                is_head=False,
             )
-            try:
-                head_group = Group.objects.get(name='Глава семьи')
-                request.user.groups.add(head_group)
-                request.user.user_permissions.add(*head_group.permissions.all())
-            except Group.DoesNotExist:
-                pass
-            messages.success(request, f'Семья "{family.name}" успешно создана! Вы назначены главой семьи.')
+            assign_family_role(family_member, ROLE_HEAD)
+            messages.success(
+                request,
+                f'Семья "{family.name}" успешно создана. Вы назначены главой семьи.',
+            )
             return redirect('family_dashboard')
     else:
         form = FamilyCreateForm()
-    return render(request, 'core/family_form.html', {
-        'form': form,
-        'title': 'Создать семью',
-        'action': 'create'
-    })
+
+    return render(
+        request,
+        'core/family_form.html',
+        {'form': form, 'title': 'Создать семью', 'action': 'create'},
+    )
 
 
 @login_required
@@ -174,166 +180,122 @@ def family_members(request):
     if not family:
         messages.error(request, 'Вы не состоите в семье.')
         return redirect('family_create')
-    
+
     members = family.members.select_related('user').order_by('-is_head', 'user__username')
-    members_with_roles = []
-    for member in members:
-        if member.is_head:
-            role = 'head'
-        elif member.user.groups.filter(name='Член семьи').exists():
-            role = 'member'
-        else:
-            role = 'viewer'
-        members_with_roles.append({
-            'member': member,
-            'role': role
-        })
-    
+    members_with_roles = [
+        {'member': member, 'role': get_member_role(member)}
+        for member in members
+    ]
+
     if request.method == 'POST':
         if not request.user.has_perm('core.can_manage_family'):
             messages.error(request, 'У вас нет прав на управление участниками.')
             return redirect('family_members')
-        
+
         form = FamilyMemberAddForm(request.POST, request_user=request.user)
         if form.is_valid():
-            username = form.cleaned_data['username']
-            role = form.cleaned_data['role']
-            user = User.objects.get(username=username)
-            family_member, created = FamilyMember.objects.get_or_create(
+            user = form.get_target_user()
+            family_member = FamilyMember.objects.create(
                 user=user,
-                family=family
+                family=family,
+                is_head=False,
             )
-            user.groups.clear()
-            user.user_permissions.clear()
-            if role == 'head':
-                demote_former_family_heads(family, user)
-                family.members.update(is_head=False)
-                family_member.is_head = True
-                try:
-                    head_group = Group.objects.get(name='Глава семьи')
-                    user.groups.add(head_group)
-                except Group.DoesNotExist:
-                    pass
-            elif role == 'member':
-                family_member.is_head = False
-                try:
-                    member_group = Group.objects.get(name='Член семьи')
-                    user.groups.add(member_group)
-                except Group.DoesNotExist:
-                    pass
-            elif role == 'viewer':
-                family_member.is_head = False
-                try:
-                    viewer_group = Group.objects.get(name='Наблюдатель')
-                    user.groups.add(viewer_group)
-                except Group.DoesNotExist:
-                    pass
-            family_member.save()
-            messages.success(request, f'Пользователь {username} добавлен в семью с ролью "{role}".')
+            role = form.cleaned_data['role']
+            assign_family_role(family_member, role)
+            messages.success(
+                request,
+                f'Пользователь {user.username} добавлен в семью с ролью "{role}".',
+            )
             return redirect('family_members')
-        else:
-            messages.error(request, f'Ошибка в форме: {form.errors}')
+        messages.error(request, 'Ошибка в форме добавления участника.')
     else:
         form = FamilyMemberAddForm(request_user=request.user)
-    
-    return render(request, 'core/family_members.html', {
-        'family': family,
-        'members_with_roles': members_with_roles,
-        'form': form,
-        'is_head': request.user.has_perm('core.can_manage_family')
-    })
-      
+
+    return render(
+        request,
+        'core/family_members.html',
+        {
+            'family': family,
+            'members_with_roles': members_with_roles,
+            'form': form,
+            'is_head': request.user.has_perm('core.can_manage_family'),
+        },
+    )
+
+
 @login_required
 def family_member_role_update(request, member_id):
     family = get_user_family(request)
     if not family or not request.user.has_perm('core.can_manage_family'):
         messages.error(request, 'У вас нет прав на это действие.')
         return redirect('family_members')
-    
+
     member = get_object_or_404(FamilyMember, id=member_id, family=family)
-    
+    current_role = get_member_role(member)
+
     if request.method == 'POST':
         form = FamilyMemberRoleForm(request.POST)
         if form.is_valid():
             role = form.cleaned_data['role']
-            member.user.groups.clear()
-            member.user.user_permissions.clear()
-            
-            if role == 'head':
-                demote_former_family_heads(family, member.user)
-                family.members.update(is_head=False)
-                member.is_head = True
-                try:
-                    head_group = Group.objects.get(name='Глава семьи')
-                    member.user.groups.add(head_group)
-                except Group.DoesNotExist:
-                    pass
-            elif role == 'member':
-                member.is_head = False
-                try:
-                    member_group = Group.objects.get(name='Член семьи')
-                    member.user.groups.add(member_group)
-                except Group.DoesNotExist:
-                    pass
-            elif role == 'viewer':
-                member.is_head = False
-                try:
-                    viewer_group = Group.objects.get(name='Наблюдатель')
-                    member.user.groups.add(viewer_group)
-                except Group.DoesNotExist:
-                    pass
-            
-            member.save()
-            messages.success(request, f'Роль пользователя {member.user.username} изменена.')
+            assign_family_role(member, role)
+            messages.success(
+                request,
+                f'Роль пользователя {member.user.username} изменена.',
+            )
             return redirect('family_members')
+        messages.error(request, 'Не удалось изменить роль пользователя.')
     else:
-        if member.is_head:
-            initial_role = 'head'
-        elif member.user.groups.filter(name='Член семьи').exists():
-            initial_role = 'member'
-        else:
-            initial_role = 'viewer'
-        form = FamilyMemberRoleForm(initial={'role': initial_role})
-        current_role = 'head' if member.is_head else ('member' if member.user.groups.filter(name='Член семьи').exists() else 'viewer')
-    
-    return render(request, 'core/family_member_role.html', {
-        'member': member,
-        'form': form,
-        'family': family,
-        'current_role': current_role
-    })
+        form = FamilyMemberRoleForm(initial={'role': current_role})
+
+    return render(
+        request,
+        'core/family_member_role.html',
+        {
+            'member': member,
+            'form': form,
+            'family': family,
+            'current_role': current_role,
+        },
+    )
+
 
 @login_required
 def family_leave(request):
-    family = get_user_family(request)
-    if not family:
+    family_member = get_user_family_member(request)
+    if not family_member:
         messages.error(request, 'Вы не состоите в семье.')
         return redirect('family_dashboard')
-    family_member = get_user_family_member(request)
+
     if family_member.is_head:
-        messages.error(request, 'Глава семьи не может покинуть семью. Сначала назначьте нового главу.')
+        messages.error(
+            request,
+            'Глава семьи не может покинуть семью. Сначала назначьте нового главу.',
+        )
         return redirect('family_members')
+
     if request.method == 'POST':
+        clear_family_role_access(request.user)
         family_member.delete()
         messages.success(request, 'Вы покинули семью.')
         return redirect('family_dashboard')
-    return render(request, 'core/family_leave_confirm.html', {
-        'family': family
-    })
+
+    return render(request, 'core/family_leave_confirm.html', {'family': family_member.family})
+
 
 @login_required
 def transaction_list(request):
     family = get_user_family(request)
-    if family:
-        transactions = Transaction.objects.filter(user__familymember__family=family)
-    else:
-        transactions = Transaction.objects.filter(user=request.user)
+    transactions = (
+        Transaction.objects.filter(user__familymember__family=family)
+        if family
+        else Transaction.objects.filter(user=request.user)
+    )
 
     start_date = request.GET.get('start_date')
     end_date = request.GET.get('end_date')
     category_id = request.GET.get('category')
     member_id = request.GET.get('member')
-    
+
     if start_date:
         transactions = transactions.filter(date__gte=start_date)
     if end_date:
@@ -342,84 +304,118 @@ def transaction_list(request):
         transactions = transactions.filter(category_id=category_id)
     if member_id and member_id != 'all' and family:
         transactions = transactions.filter(user_id=member_id)
-    
-    transactions = transactions.select_related('category', 'user').order_by('-date', '-created_at')
-    
-    if family:
-        categories = Category.objects.filter(family=family)
-    else:
-        categories = Category.objects.filter(user=request.user)
-    
+
+    transactions = transactions.select_related('category', 'user').order_by(
+        '-date', '-created_at'
+    )
+
+    categories = (
+        Category.objects.filter(family=family)
+        if family
+        else Category.objects.filter(user=request.user)
+    ).order_by('type', 'name')
+
     per_page = request.GET.get('per_page', '20')
     try:
         per_page = int(per_page)
         if per_page not in [10, 20, 50, 100]:
             per_page = 20
-    except (ValueError, TypeError):
+    except (TypeError, ValueError):
         per_page = 20
-    
+
     paginator = Paginator(transactions, per_page)
     page_number = request.GET.get('page', 1)
-    
     try:
         page_obj = paginator.get_page(page_number)
     except (PageNotAnInteger, EmptyPage):
         page_obj = paginator.get_page(1)
-    
-    member_filter_form = FamilyMemberFilterForm(user=request.user, initial={'member': member_id or 'all'})
-    
-    return render(request, 'core/transaction_list.html', {
-        'page_obj': page_obj,
-        'paginator': paginator,
-        'categories': categories,
-        'start_date': start_date,
-        'end_date': end_date,
-        'selected_category': category_id,
-        'member_filter_form': member_filter_form,
-        'per_page': per_page,
-        'per_page_options': [10, 20, 50, 100],
-    })
+
+    member_filter_form = FamilyMemberFilterForm(
+        user=request.user,
+        initial={'member': member_id or 'all'},
+    )
+
+    return render(
+        request,
+        'core/transaction_list.html',
+        {
+            'page_obj': page_obj,
+            'paginator': paginator,
+            'categories': categories,
+            'start_date': start_date,
+            'end_date': end_date,
+            'selected_category': category_id,
+            'member_filter_form': member_filter_form,
+            'per_page': per_page,
+            'per_page_options': [10, 20, 50, 100],
+        },
+    )
+
 
 @login_required
 def transaction_create(request):
     family = get_user_family(request)
+    if family and not request.user.has_perm('core.add_transaction'):
+        messages.error(request, 'У вас нет прав на создание транзакций.')
+        return redirect('transaction_list')
+
     if request.method == 'POST':
         form = TransactionForm(request.POST, user=request.user)
         if form.is_valid():
             transaction = form.save(commit=False)
             transaction.user = request.user
+
             if transaction.category.type == Category.EXPENSE:
                 budget_info = get_budget_status(
                     transaction.category,
                     user=request.user,
                     family=family,
-                    date=transaction.date
+                    target_date=transaction.date,
                 )
                 if budget_info.get('has_budget'):
                     projected_spent = budget_info['spent'] + transaction.amount
-                    projected_percent = (projected_spent / budget_info['budget_amount'] * 100)
+                    projected_percent = (
+                        projected_spent / budget_info['budget_amount'] * 100
+                    )
                     if projected_percent >= 100:
                         messages.warning(
                             request,
-                            f"Бюджет '{transaction.category.name}' будет превышен на {projected_spent - budget_info['budget_amount']:.2f} ₽!"
+                            (
+                                f"Бюджет '{transaction.category.name}' будет превышен на "
+                                f"{projected_spent - budget_info['budget_amount']:.2f} ₽!"
+                            ),
                         )
                     elif projected_percent >= 80:
                         messages.warning(
                             request,
-                            f"Внимание! Бюджет '{transaction.category.name}' будет использован на {projected_percent:.0f}%."
+                            (
+                                f"Внимание! Бюджет '{transaction.category.name}' будет "
+                                f'использован на {projected_percent:.0f}%.'
+                            ),
                         )
+
             transaction.save()
             messages.success(request, 'Транзакция добавлена.')
             return redirect('transaction_list')
     else:
         form = TransactionForm(user=request.user)
-    return render(request, 'core/transaction_form.html', {'form': form, 'title': 'Добавить транзакцию'})
+
+    return render(
+        request,
+        'core/transaction_form.html',
+        {'form': form, 'title': 'Добавить транзакцию'},
+    )
+
 
 @login_required
 def category_create(request):
     family = get_user_family(request)
+    if family and not _can_manage_family_categories(request.user, family, 'add_category'):
+        messages.error(request, 'У вас нет прав на создание категорий.')
+        return redirect('transaction_list')
+
     if request.method == 'POST':
-        form = CategoryForm(request.POST)
+        form = CategoryForm(request.POST, user=request.user)
         if form.is_valid():
             category = form.save(commit=False)
             if family:
@@ -430,250 +426,275 @@ def category_create(request):
             messages.success(request, 'Категория создана.')
             return redirect('transaction_create')
     else:
-        form = CategoryForm()
-    
-    if family:
-        categories = Category.objects.filter(family=family)
-    else:
-        categories = Category.objects.filter(user=request.user)
-    
-    return render(request, 'core/transaction_form.html', {
-        'form': form, 
-        'title': 'Создать категорию',
-        'categories': categories
-    })
+        form = CategoryForm(user=request.user)
+
+    categories = (
+        Category.objects.filter(family=family)
+        if family
+        else Category.objects.filter(user=request.user)
+    ).order_by('type', 'name')
+
+    return render(
+        request,
+        'core/transaction_form.html',
+        {
+            'form': form,
+            'title': 'Создать категорию',
+            'categories': categories,
+        },
+    )
+
 
 @login_required
 def budget_list(request):
-    if not request.user.has_perm('core.can_set_budget'):
-        return render(request, 'core/budget_list.html', {
-            'no_permission': True,
-            'is_family': get_user_family(request) is not None,
-        })
     family = get_user_family(request)
+    if not _can_manage_budgets(request.user, family):
+        return render(
+            request,
+            'core/budget_list.html',
+            {
+                'no_permission': True,
+                'is_family': family is not None,
+            },
+        )
+
     if request.method == 'POST':
         form = BudgetForm(request.POST, user=request.user)
         if form.is_valid():
             budget = form.save(commit=False)
+            scope = {
+                'category': budget.category,
+                'month': budget.month,
+            }
             if family:
-                budget.family = family
+                scope['family'] = family
             else:
-                budget.user = request.user
-            if family:
-                existing = Budget.objects.filter(
-                    family=family,
-                    category=budget.category,
-                    month=budget.month
-                ).first()
-            else:
-                existing = Budget.objects.filter(
-                    user=request.user,
-                    category=budget.category,
-                    month=budget.month
-                ).first()
-            if existing:
-                existing.amount = budget.amount
-                existing.save()
-                messages.success(request, 'Бюджет обновлён.')
-            else:
-                budget.save()
-                messages.success(request, 'Бюджет установлен.')
+                scope['user'] = request.user
+
+            _, created = Budget.objects.update_or_create(
+                defaults={'amount': budget.amount},
+                **scope,
+            )
+            messages.success(
+                request,
+                'Бюджет установлен.' if created else 'Бюджет обновлён.',
+            )
             return redirect('budget_list')
-        else:
-            messages.error(request, f'Ошибка в форме: {form.errors}')
+        messages.error(request, 'Ошибка в форме бюджета.')
     else:
         form = BudgetForm(user=request.user)
-    today = date.today()
-    current_month = today.replace(day=1)
+
+    current_month = timezone.localdate().replace(day=1)
     last_month = current_month - relativedelta(months=1)
     if family:
         budgets = Budget.objects.filter(
             family=family,
-            month__in=[last_month, current_month]
-        ).select_related('category')
+            month__in=[last_month, current_month],
+        )
     else:
         budgets = Budget.objects.filter(
             user=request.user,
-            month__in=[last_month, current_month]
-        ).select_related('category')
-    return render(request, 'core/budget_list.html', {
-        'form': form,
-        'budgets': budgets,
-        'current_month': current_month,
-        'last_month': last_month,
-        'is_family': family is not None,
-        'no_permission': False,
-    })
+            month__in=[last_month, current_month],
+        )
+    budgets = budgets.select_related('category').order_by('-month', 'category__name')
+
+    return render(
+        request,
+        'core/budget_list.html',
+        {
+            'form': form,
+            'budgets': budgets,
+            'current_month': current_month,
+            'last_month': last_month,
+            'is_family': family is not None,
+            'no_permission': False,
+        },
+    )
+
 
 @login_required
 def budget_delete(request, pk):
-    """Удаление бюджета с проверкой прав и принадлежности."""
     budget = get_object_or_404(Budget, pk=pk)
-    
     family = get_user_family(request)
-    
+
     if family:
-        if budget.family != family:
+        if budget.family_id != family.id:
             messages.error(request, 'Вы не можете удалить бюджет другой семьи.')
             return redirect('budget_list')
+        if not request.user.has_perm('core.can_set_budget'):
+            messages.error(request, 'У вас нет прав на удаление бюджетов.')
+            return redirect('budget_list')
     else:
-        if budget.user != request.user:
+        if budget.user_id != request.user.id:
             messages.error(request, 'Вы не можете удалить чужой бюджет.')
             return redirect('budget_list')
 
-    if not request.user.has_perm('core.can_set_budget'):
-        messages.error(request, 'У вас нет прав на удаление бюджетов.')
-        return redirect('budget_list')
-    
     if request.method == 'POST':
+        category_name = budget.category.name
+        month_label = budget.month.strftime('%Y-%m')
         budget.delete()
-        messages.success(request, f'Бюджет "{budget.category.name}" за {budget.month.strftime("%Y-%m")} успешно удалён.')
+        messages.success(
+            request,
+            f'Бюджет "{category_name}" за {month_label} успешно удалён.',
+        )
         return redirect('budget_list')
-    
+
     return render(request, 'core/budget_confirm_delete.html', {'budget': budget})
 
 
 @login_required
 def reports_view(request):
     family = get_user_family(request)
-    today = date.today()
+    if not _can_manage_family_reports(request.user, family):
+        messages.error(request, 'У вас нет прав на просмотр семейных отчётов.')
+        return redirect('family_dashboard')
+
+    today = timezone.localdate()
     year, month = today.year, today.month
-    
+
     if family:
         summary = get_monthly_summary(family=family, year=year, month=month)
-        expense_data = get_expense_breakdown_by_category(family=family, year=year, month=month)
+        expense_data = get_expense_breakdown_by_category(
+            family=family,
+            year=year,
+            month=month,
+        )
         budget_comparison = get_budget_vs_actual(family=family, year=year, month=month)
     else:
         summary = get_monthly_summary(user=request.user, year=year, month=month)
-        expense_data = get_expense_breakdown_by_category(user=request.user, year=year, month=month)
-        budget_comparison = get_budget_vs_actual(user=request.user, year=year, month=month)
-    
-    if family:
-        total_expenses = Transaction.objects.filter(
-            user__familymember__family=family,
-            category__type=Category.EXPENSE
-        ).count()
-    else:
-        total_expenses = Transaction.objects.filter(
+        expense_data = get_expense_breakdown_by_category(
             user=request.user,
-            category__type=Category.EXPENSE
-        ).count()
+            year=year,
+            month=month,
+        )
+        budget_comparison = get_budget_vs_actual(user=request.user, year=year, month=month)
 
     labels = [item['category__name'] for item in expense_data]
     values = [float(item['total']) for item in expense_data]
-    
-    return render(request, 'core/reports.html', {
-        'labels': labels,
-        'values': values,
-        'summary': summary,
-        'expense_data': expense_data,
-        'budget_comparison': budget_comparison,
-        'current_month': f"{today.strftime('%B')} {year}",
-        'is_family': family is not None,
-        'has_any_expenses': total_expenses > 0,
-    })
+
+    return render(
+        request,
+        'core/reports.html',
+        {
+            'labels': labels,
+            'values': values,
+            'summary': summary,
+            'expense_data': expense_data,
+            'budget_comparison': budget_comparison,
+            'current_month': f'{today.month:02d}.{year}',
+            'is_family': family is not None,
+            'has_any_expenses': bool(values),
+        },
+    )
+
 
 @login_required
 def export_csv(request):
-    if not request.user.has_perm('core.can_import_export'):
-        raise PermissionDenied("У вас нет прав на экспорт данных.")
-    
     family = get_user_family(request)
-    if family:
-        transactions = Transaction.objects.filter(
-            user__familymember__family=family
-        ).select_related('category', 'user')
-    else:
-        transactions = Transaction.objects.filter(
-            user=request.user
-        ).select_related('category')
+    if not _can_import_export(request.user, family):
+        raise PermissionDenied('У вас нет прав на экспорт данных.')
 
+    transactions = (
+        Transaction.objects.filter(user__familymember__family=family)
+        if family
+        else Transaction.objects.filter(user=request.user)
+    )
     if not transactions.exists():
-        messages.warning(request, 'У вас нет транзакций для экспорта. Сначала добавьте данные.')
+        messages.warning(
+            request,
+            'У вас нет транзакций для экспорта. Сначала добавьте данные.',
+        )
         return redirect('transaction_list')
-    
-    response = HttpResponse(content_type='text/csv')
+
+    response = HttpResponse(content_type='text/csv; charset=utf-8')
     response['Content-Disposition'] = 'attachment; filename="transactions.csv"'
-    
-    writer = csv.writer(response)
-    writer.writerow(['Дата', 'Пользователь', 'Тип', 'Категория', 'Сумма', 'Описание'])
-    
-    for t in transactions:
-        writer.writerow([
-            t.date.strftime('%Y-%m-%d'),
-            t.user.username,
-            'Доход' if t.category.type == Category.INCOME else 'Расход',
-            t.category.name,
-            t.amount,
-            t.description or ''
-        ])
-    
+    export_transactions_to_csv(response, request.user, family=family)
     return response
+
 
 @login_required
 def import_csv(request):
-    if not request.user.has_perm('core.can_import_export'):
-        raise PermissionDenied("У вас нет прав на импорт данных.")
-
     family = get_user_family(request)
-    if family:
-        has_transactions = Transaction.objects.filter(
-            user__familymember__family=family
-        ).exists()
-    else:
-        has_transactions = Transaction.objects.filter(
-            user=request.user
-        ).exists()
-    
+    if not _can_import_export(request.user, family):
+        raise PermissionDenied('У вас нет прав на импорт данных.')
+
+    has_transactions = (
+        Transaction.objects.filter(user__familymember__family=family).exists()
+        if family
+        else Transaction.objects.filter(user=request.user).exists()
+    )
+
     if request.method == 'POST':
         csv_file = request.FILES.get('csv_file')
         if not csv_file:
             messages.error(request, 'Файл не выбран.')
-            return render(request, 'core/import_csv.html', {
-                'has_transactions': has_transactions
-            })
-        if not csv_file.name.endswith('.csv'):
-            messages.error(request, 'Только CSV-файлы разрешены.')
-            return render(request, 'core/import_csv.html', {
-                'has_transactions': has_transactions
-            })
+            return render(
+                request,
+                'core/import_csv.html',
+                {'has_transactions': has_transactions},
+            )
+        if not csv_file.name.lower().endswith('.csv'):
+            messages.error(request, 'Разрешены только CSV-файлы.')
+            return render(
+                request,
+                'core/import_csv.html',
+                {'has_transactions': has_transactions},
+            )
         try:
             count = import_transactions_from_csv(csv_file, request.user)
-            if count == 0:
-                messages.warning(request, 'Файл пуст или не содержит корректных данных.')
-            else:
-                messages.success(request, f'Успешно импортировано {count} транзакций.')
-            return redirect('transaction_list')
-        except Exception as e:
-            messages.error(request, f'Ошибка при импорте: {str(e)}')
-            return render(request, 'core/import_csv.html', {
-                'has_transactions': has_transactions
-            })
-    
-    return render(request, 'core/import_csv.html', {
-        'has_transactions': has_transactions
-    })
+        except ValidationError as exc:
+            messages.error(request, ' '.join(exc.messages))
+            return render(
+                request,
+                'core/import_csv.html',
+                {'has_transactions': has_transactions},
+            )
+        except Exception as exc:
+            messages.error(request, f'Ошибка при импорте: {exc}')
+            return render(
+                request,
+                'core/import_csv.html',
+                {'has_transactions': has_transactions},
+            )
+
+        if count == 0:
+            messages.warning(
+                request,
+                'Файл пуст или не содержит корректных данных.',
+            )
+        else:
+            messages.success(request, f'Успешно импортировано {count} транзакций.')
+        return redirect('transaction_list')
+
+    return render(request, 'core/import_csv.html', {'has_transactions': has_transactions})
+
 
 @login_required
 def transaction_delete(request, pk):
     transaction = get_object_or_404(Transaction, pk=pk)
     family = get_user_family(request)
-    if request.user.has_perm('core.can_delete_any_transaction'):
-        if family and not FamilyMember.objects.filter(
-            user=transaction.user, family=family
-        ).exists():
+
+    if family:
+        if not FamilyMember.objects.filter(user=transaction.user, family=family).exists():
             messages.error(request, 'Вы не можете удалить транзакцию вне вашей семьи.')
             return redirect('transaction_list')
-    elif not family and transaction.user == request.user:
-        pass
+        can_delete = request.user.has_perm(
+            'core.can_delete_any_transaction'
+        ) or transaction.user_id == request.user.id
     else:
+        can_delete = transaction.user_id == request.user.id
+
+    if not can_delete:
         messages.error(request, 'Вы не можете удалить эту транзакцию.')
         return redirect('transaction_list')
+
     if request.method == 'POST':
         transaction.delete()
         messages.success(request, 'Транзакция удалена.')
         return redirect('transaction_list')
+
     return render(request, 'core/transaction_confirm_delete.html', {'transaction': transaction})
+
 
 @login_required
 def category_delete(request, pk):
@@ -681,21 +702,28 @@ def category_delete(request, pk):
     family = get_user_family(request)
 
     if family:
-        if category.family != family:
+        if category.family_id != family.id:
             messages.error(request, 'Вы не можете удалить категорию другой семьи.')
             return redirect('transaction_create')
+        if not request.user.has_perm('core.delete_category'):
+            messages.error(request, 'У вас нет прав на удаление категорий.')
+            return redirect('transaction_create')
     else:
-        if category.user != request.user:
+        if category.user_id != request.user.id:
             messages.error(request, 'Вы не можете удалить чужую категорию.')
             return redirect('transaction_create')
+
     if Transaction.objects.filter(category=category).exists():
-        messages.error(request, 'Нельзя удалить категорию, к которой привязаны транзакции.')
+        messages.error(
+            request,
+            'Нельзя удалить категорию, к которой привязаны транзакции.',
+        )
         return redirect('transaction_create')
-    
+
     if request.method == 'POST':
         category_name = category.name
         category.delete()
         messages.success(request, f'Категория "{category_name}" успешно удалена.')
         return redirect('transaction_create')
-    
+
     return render(request, 'core/category_confirm_delete.html', {'category': category})

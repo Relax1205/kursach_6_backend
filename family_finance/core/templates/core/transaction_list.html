@@ -87,12 +87,7 @@
                     {% endif %}
                 </td>
                 <td class="text-center">
-                    {% if perms.core.can_delete_any_transaction %}
-                    <a href="{% url 'transaction_delete' pk=t.pk %}"
-                       class="btn btn-sm btn-danger">
-                        Удалить
-                    </a>
-                    {% elif not is_family and t.user == request.user %}
+                    {% if perms.core.can_delete_any_transaction or t.user == request.user %}
                     <a href="{% url 'transaction_delete' pk=t.pk %}"
                        class="btn btn-sm btn-danger">
                         Удалить
@@ -176,5 +171,7 @@
 </div>
 {% endif %}
 
+{% if not is_family or perms.core.add_transaction %}
 <a href="{% url 'transaction_create' %}" class="btn btn-success mt-3">+ Новая транзакция</a>
+{% endif %}
 {% endblock %}

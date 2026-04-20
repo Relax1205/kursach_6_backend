@@ -1,32 +1,50 @@
 import csv
-from decimal import Decimal
-from datetime import date
-from django.core.exceptions import ValidationError
-from django.db.models import Sum, Q
-from .models import Transaction, Category, Budget, FamilyMember
+from datetime import date as dt_date
+from decimal import Decimal, InvalidOperation
+from io import StringIO
+
 from dateutil.relativedelta import relativedelta
+from django.core.exceptions import ValidationError
+from django.db import transaction as db_transaction
+from django.db.models import Sum
+from django.utils import timezone
+
+from .models import Budget, Category, FamilyMember, Transaction
+
+HEADER_ALIASES = {
+    'date': ('Дата', 'Date'),
+    'user': ('Пользователь', 'User'),
+    'type': ('Тип', 'Type'),
+    'category': ('Категория', 'Category'),
+    'amount': ('Сумма', 'Amount'),
+    'description': ('Описание', 'Description'),
+}
+
+
+def _get_period_bounds(year, month):
+    start_date = dt_date(year, month, 1)
+    end_date = start_date + relativedelta(months=1) - relativedelta(days=1)
+    return start_date, end_date
+
+
+def _get_transactions_queryset(user=None, family=None):
+    if family:
+        return Transaction.objects.filter(user__familymember__family=family)
+    return Transaction.objects.filter(user=user)
+
 
 def get_monthly_summary(user=None, family=None, year=None, month=None):
-    start_date = date(year, month, 1)
-    if month == 12:
-        end_date = date(year + 1, 1, 1)
-    else:
-        end_date = date(year, month + 1, 1)
-    end_date -= date.resolution
-
-    if family:
-        base_qs = Transaction.objects.filter(user__familymember__family=family)
-    else:
-        base_qs = Transaction.objects.filter(user=user)
+    start_date, end_date = _get_period_bounds(year, month)
+    base_qs = _get_transactions_queryset(user=user, family=family)
 
     income = base_qs.filter(
         category__type=Category.INCOME,
-        date__range=[start_date, end_date]
+        date__range=[start_date, end_date],
     ).aggregate(total=Sum('amount'))['total'] or 0
 
     expense = base_qs.filter(
         category__type=Category.EXPENSE,
-        date__range=[start_date, end_date]
+        date__range=[start_date, end_date],
     ).aggregate(total=Sum('amount'))['total'] or 0
 
     return {
@@ -35,107 +53,116 @@ def get_monthly_summary(user=None, family=None, year=None, month=None):
         'balance': income - expense,
     }
 
-def get_expense_breakdown_by_category(user=None, family=None, year=None, month=None):
-    start_date = date(year, month, 1)
-    if month == 12:
-        end_date = date(year + 1, 1, 1)
-    else:
-        end_date = date(year, month + 1, 1)
-    end_date -= date.resolution
 
-    if family:
-        base_qs = Transaction.objects.filter(user__familymember__family=family)
-    else:
-        base_qs = Transaction.objects.filter(user=user)
+def get_expense_breakdown_by_category(user=None, family=None, year=None, month=None):
+    start_date, end_date = _get_period_bounds(year, month)
+    base_qs = _get_transactions_queryset(user=user, family=family)
 
     return (
         base_qs.filter(
             category__type=Category.EXPENSE,
-            date__range=[start_date, end_date]
+            date__range=[start_date, end_date],
         )
         .values('category__name')
         .annotate(total=Sum('amount'))
-        .order_by('-total')
+        .order_by('-total', 'category__name')
     )
 
-def export_transactions_to_csv(response, user, family=None):
-    writer = csv.writer(response)
-    writer.writerow(['Дата', 'Пользователь', 'Тип', 'Категория', 'Сумма', 'Описание'])
-    if family:
-        transactions = Transaction.objects.filter(user__familymember__family=family).select_related('category', 'user').order_by('-date')
-    else:
-        transactions = Transaction.objects.filter(user=user).select_related('category').order_by('-date')
 
-    for t in transactions:
-        writer.writerow([
-            t.date.strftime('%Y-%m-%d'),
-            t.user.username,
-            'Доход' if t.category.type == Category.INCOME else 'Расход',
-            t.category.name,
-            t.amount,
-            t.description or ''
-        ])
+def export_transactions_to_csv(response, user, family=None, include_user=None):
+    if include_user is None:
+        include_user = family is not None
+
+    writer = csv.writer(response)
+    headers = ['Дата']
+    if include_user:
+        headers.append('Пользователь')
+    headers.extend(['Тип', 'Категория', 'Сумма', 'Описание'])
+    writer.writerow(headers)
+
+    transactions = (
+        _get_transactions_queryset(user=user, family=family)
+        .select_related('category', 'user')
+        .order_by('-date', '-created_at')
+    )
+
+    for transaction in transactions:
+        row = [transaction.date.strftime('%Y-%m-%d')]
+        if include_user:
+            row.append(transaction.user.username)
+        row.extend(
+            [
+                'Доход'
+                if transaction.category.type == Category.INCOME
+                else 'Расход',
+                transaction.category.name,
+                transaction.amount,
+                transaction.description or '',
+            ]
+        )
+        writer.writerow(row)
+
 
 def get_budget_vs_actual(user=None, family=None, year=None, month=None):
-    start_date = date(year, month, 1)
-    end_date = start_date + relativedelta(months=1) - relativedelta(days=1)
+    start_date, end_date = _get_period_bounds(year, month)
+    base_qs = _get_transactions_queryset(user=user, family=family)
 
     if family:
-        budgets = Budget.objects.filter(family=family, month=start_date).select_related('category')
-        base_qs = Transaction.objects.filter(user__familymember__family=family)
+        budgets = Budget.objects.filter(family=family, month=start_date).select_related(
+            'category'
+        )
     else:
-        budgets = Budget.objects.filter(user=user, month=start_date).select_related('category')
-        base_qs = Transaction.objects.filter(user=user)
+        budgets = Budget.objects.filter(user=user, month=start_date).select_related(
+            'category'
+        )
 
     result = []
-    for budget in budgets:
+    for budget in budgets.order_by('category__name'):
         actual = base_qs.filter(
             category=budget.category,
-            date__range=[start_date, end_date]
+            date__range=[start_date, end_date],
         ).aggregate(total=Sum('amount'))['total'] or 0
-        
+
         diff = budget.amount - actual
-        result.append({
-            'category_name': budget.category.name,
-            'budget_amount': budget.amount,
-            'actual_amount': actual,
-            'difference': diff,
-            'is_over_budget': actual > budget.amount,
-        })
+        result.append(
+            {
+                'category_name': budget.category.name,
+                'budget_amount': budget.amount,
+                'actual_amount': actual,
+                'difference': diff,
+                'is_over_budget': actual > budget.amount,
+            }
+        )
     return result
 
-def get_budget_status(category, user=None, family=None, date=None):
-    if date is None:
-        date = date.today()
-    
-    month_start = date.replace(day=1)
-    
+
+def get_budget_status(category, user=None, family=None, target_date=None, date=None):
+    if target_date is None and date is not None:
+        target_date = date
+    current_date = target_date or timezone.localdate()
+    month_start = current_date.replace(day=1)
+    month_end = month_start + relativedelta(months=1) - relativedelta(days=1)
+    base_qs = _get_transactions_queryset(user=user, family=family)
+
     if family:
         budget = Budget.objects.filter(
             family=family,
             category=category,
-            month=month_start
+            month=month_start,
         ).first()
-        base_qs = Transaction.objects.filter(user__familymember__family=family)
     else:
         budget = Budget.objects.filter(
             user=user,
             category=category,
-            month=month_start
+            month=month_start,
         ).first()
-        base_qs = Transaction.objects.filter(user=user)
 
     if not budget:
         return {'has_budget': False}
 
-    if date.month == 12:
-        month_end = date.replace(year=date.year+1, month=1, day=1) - relativedelta(days=1)
-    else:
-        month_end = date.replace(month=date.month+1, day=1) - relativedelta(days=1)
-
     spent = base_qs.filter(
         category=category,
-        date__range=[month_start, month_end]
+        date__range=[month_start, month_end],
     ).aggregate(total=Sum('amount'))['total'] or 0
 
     remaining = budget.amount - spent
@@ -143,12 +170,14 @@ def get_budget_status(category, user=None, family=None, date=None):
 
     warning = None
     warning_type = 'info'
-
     if percent_used >= 100:
         warning = f"Бюджет '{category.name}' превышен на {abs(remaining):.2f} ₽!"
         warning_type = 'danger'
     elif percent_used >= 80:
-        warning = f"Внимание! Бюджет '{category.name}' использован на {percent_used:.0f}%. Осталось {remaining:.2f} ₽."
+        warning = (
+            f"Внимание! Бюджет '{category.name}' использован на "
+            f'{percent_used:.0f}%. Осталось {remaining:.2f} ₽.'
+        )
         warning_type = 'warning'
 
     return {
@@ -161,64 +190,112 @@ def get_budget_status(category, user=None, family=None, date=None):
         'warning_type': warning_type,
     }
 
+
+def _get_row_value(row, key):
+    for alias in HEADER_ALIASES[key]:
+        value = row.get(alias)
+        if value is not None:
+            return value.strip()
+    return ''
+
+
+def _parse_transaction_type(type_value, row_number):
+    normalized = type_value.lower()
+    if normalized in {'доход', Category.INCOME}:
+        return Category.INCOME
+    if normalized in {'расход', Category.EXPENSE}:
+        return Category.EXPENSE
+    raise ValidationError(f'Строка {row_number}: неизвестный тип операции "{type_value}".')
+
+
 def import_transactions_from_csv(file, user):
-    from io import StringIO
-    content = file.read().decode('utf-8')
-    reader = csv.reader(StringIO(content))
-    try:
-        next(reader)
-    except StopIteration:
-        raise ValidationError("Пустой CSV-файл")
+    content = file.read().decode('utf-8-sig')
+    reader = csv.DictReader(StringIO(content))
+    if not reader.fieldnames:
+        raise ValidationError('Пустой CSV-файл.')
+
+    missing_headers = [
+        key
+        for key in ('date', 'type', 'category', 'amount')
+        if not any(alias in reader.fieldnames for alias in HEADER_ALIASES[key])
+    ]
+    if missing_headers:
+        raise ValidationError('CSV-файл не содержит обязательные колонки.')
+
+    family_member = FamilyMember.objects.select_related('family').filter(user=user).first()
+    family = family_member.family if family_member else None
+    family_users = {}
+    if family:
+        family_users = {
+            member.user.username: member.user
+            for member in family.members.select_related('user')
+        }
 
     count = 0
-    try:
-        family_member = FamilyMember.objects.get(user=user)
-        family = family_member.family
-    except FamilyMember.DoesNotExist:
-        family = None
+    with db_transaction.atomic():
+        for row_number, row in enumerate(reader, start=2):
+            if not row or all((value or '').strip() == '' for value in row.values()):
+                continue
 
-    for row in reader:
-        if not row or all(cell.strip() == '' for cell in row):
-            continue
-        if len(row) < 4:
-            continue
+            date_str = _get_row_value(row, 'date')
+            type_str = _get_row_value(row, 'type')
+            category_name = _get_row_value(row, 'category')
+            amount_str = _get_row_value(row, 'amount')
+            description = _get_row_value(row, 'description')
+            username = _get_row_value(row, 'user')
 
-        date_str = row[0].strip()
-        type_str = row[1].strip()
-        category_name = row[2].strip()
-        amount_str = row[3].strip()
-        description = row[4].strip() if len(row) > 4 else ''
+            if not date_str or not type_str or not category_name or not amount_str:
+                raise ValidationError(
+                    f'Строка {row_number}: заполните дату, тип, категорию и сумму.'
+                )
 
-        if not date_str or not type_str or not category_name or not amount_str:
-            continue
+            category_type = _parse_transaction_type(type_str, row_number)
 
-        if type_str == 'Доход':
-            cat_type = Category.INCOME
-        elif type_str == 'Расход':
-            cat_type = Category.EXPENSE
-        else:
-            raise ValidationError(f'Неизвестный тип операции: {type_str}')
+            try:
+                amount = Decimal(amount_str)
+            except InvalidOperation as exc:
+                raise ValidationError(
+                    f'Строка {row_number}: сумма "{amount_str}" имеет неверный формат.'
+                ) from exc
 
-        if family:
-            category, created = Category.objects.get_or_create(
-                name=category_name,
-                type=cat_type,
-                family=family
+            if amount <= 0:
+                raise ValidationError(f'Строка {row_number}: сумма должна быть положительной.')
+
+            try:
+                transaction_date = dt_date.fromisoformat(date_str)
+            except ValueError as exc:
+                raise ValidationError(
+                    f'Строка {row_number}: дата "{date_str}" должна быть в формате ГГГГ-ММ-ДД.'
+                ) from exc
+
+            transaction_user = user
+            if family and username:
+                transaction_user = family_users.get(username)
+                if transaction_user is None:
+                    raise ValidationError(
+                        f'Строка {row_number}: пользователь "{username}" не найден в семье.'
+                    )
+
+            if family:
+                category, _ = Category.objects.get_or_create(
+                    name=category_name,
+                    type=category_type,
+                    family=family,
+                )
+            else:
+                category, _ = Category.objects.get_or_create(
+                    name=category_name,
+                    type=category_type,
+                    user=user,
+                )
+
+            Transaction.objects.create(
+                user=transaction_user,
+                category=category,
+                amount=amount,
+                description=description,
+                date=transaction_date,
             )
-        else:
-            category, created = Category.objects.get_or_create(
-                name=category_name,
-                type=cat_type,
-                user=user
-            )
-
-        Transaction.objects.create(
-            user=user,
-            category=category,
-            amount=Decimal(amount_str),
-            description=description,
-            date=date.fromisoformat(date_str)
-        )
-        count += 1
+            count += 1
 
     return count

@@ -2,6 +2,7 @@ import pytest
 from decimal import Decimal
 from datetime import date
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
 from django.db.utils import IntegrityError
 from core.models import Family, FamilyMember, Category, Transaction, Budget
 
@@ -22,7 +23,7 @@ class TestFamilyModel:
 class TestFamilyMemberModel:
     def test_one_to_one_constraint(self, user, family):
         FamilyMember.objects.create(user=user, family=family)
-        with pytest.raises(IntegrityError):
+        with pytest.raises(ValidationError):
             FamilyMember.objects.create(user=user, family=Family.objects.create(name='Вторая'))
 
     def test_is_head_flag(self, user, family):
@@ -45,7 +46,8 @@ class TestCategoryModel:
 
 @pytest.mark.django_db
 class TestTransactionModel:
-    def test_create_and_ordering(self, user, expense_category):
+    def test_create_and_ordering(self, user, family, expense_category):
+        FamilyMember.objects.create(user=user, family=family)
         t1 = Transaction.objects.create(user=user, category=expense_category, amount=100, date=date(2025, 1, 1))
         t2 = Transaction.objects.create(user=user, category=expense_category, amount=200, date=date(2025, 1, 2))
         assert Transaction.objects.all()[0] == t2  # Сортировка по убыванию даты

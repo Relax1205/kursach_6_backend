@@ -1,4 +1,5 @@
-from .models import FamilyMember
+from .roles import get_family_member_for_user
+
 
 def family_context(request):
     if not request.user.is_authenticated:
@@ -8,20 +9,19 @@ def family_context(request):
             'is_head': False,
             'can_manage': False,
         }
-    
-    try:
-        family_member = FamilyMember.objects.get(user=request.user)
-        family = family_member.family
-        return {
-            'is_family': True,
-            'family': family,
-            'is_head': family_member.is_head,
-            'can_manage': request.user.has_perm('core.can_manage_family'),
-        }
-    except FamilyMember.DoesNotExist:
+
+    family_member = get_family_member_for_user(request.user)
+    if not family_member:
         return {
             'is_family': False,
             'family': None,
             'is_head': False,
             'can_manage': False,
         }
+
+    return {
+        'is_family': True,
+        'family': family_member.family,
+        'is_head': family_member.is_head,
+        'can_manage': request.user.has_perm('core.can_manage_family'),
+    }

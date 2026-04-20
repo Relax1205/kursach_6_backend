@@ -1,8 +1,10 @@
 # tests/conftest.py
 import os
+import sys
 import pytest
 from decimal import Decimal
 from datetime import date
+from pathlib import Path
 from django.contrib.auth.models import User, Group, Permission
 from django.test import Client
 
@@ -33,9 +35,26 @@ def _grant_core_permissions(user, codenames):
         user.user_permissions.add(*perms)
 
 # Добавляем проект в PYTHONPATH
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'family_finance.settings')
+ROOT_DIR = Path(__file__).resolve().parents[1]
+PROJECT_DIR = ROOT_DIR / 'family_finance'
+if str(PROJECT_DIR) not in sys.path:
+    sys.path.insert(0, str(PROJECT_DIR))
 
-from core.models import Family, FamilyMember, Category, Transaction, Budget
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'family_finance.settings')
+os.environ.setdefault('DEBUG', 'True')
+os.environ.setdefault('SECRET_KEY', 'test-secret-key-for-testing')
+
+
+def _core_models():
+    from core.models import Budget, Category, Family, FamilyMember, Transaction
+
+    return {
+        'Budget': Budget,
+        'Category': Category,
+        'Family': Family,
+        'FamilyMember': FamilyMember,
+        'Transaction': Transaction,
+    }
 
 # ================= УЧЕТНЫЕ ЗАПИСИ =================
 @pytest.fixture
@@ -55,10 +74,11 @@ def anonymous_client():
 # ================= СЕМЬЯ И РОЛИ =================
 @pytest.fixture
 def family(db):
-    return Family.objects.create(name='Тестовая семья')
+    return _core_models()['Family'].objects.create(name='Тестовая семья')
 
 @pytest.fixture
 def family_head(family, db):
+    FamilyMember = _core_models()['FamilyMember']
     u = User.objects.create_user(username='head_user', password='headpass123')
     FamilyMember.objects.create(user=u, family=family, is_head=True)
     try:
@@ -77,6 +97,7 @@ def head_client(family_head, db):
 
 @pytest.fixture
 def family_member(family, db):
+    FamilyMember = _core_models()['FamilyMember']
     u = User.objects.create_user(username='member_user', password='memberpass123')
     FamilyMember.objects.create(user=u, family=family, is_head=False)
     try:
@@ -95,6 +116,7 @@ def member_client(family_member, db):
 
 @pytest.fixture
 def viewer_user(family, db):
+    FamilyMember = _core_models()['FamilyMember']
     u = User.objects.create_user(username='viewer_user', password='viewerpass123')
     FamilyMember.objects.create(user=u, family=family, is_head=False)
     try:
@@ -114,28 +136,43 @@ def viewer_client(viewer_user, db):
 # ================= КАТЕГОРИИ И ТРАНЗАКЦИИ =================
 @pytest.fixture
 def expense_category(family, db):
+    Category = _core_models()['Category']
     return Category.objects.create(name='Продукты', type=Category.EXPENSE, family=family)
 
 @pytest.fixture
 def income_category(family, db):
+    Category = _core_models()['Category']
     return Category.objects.create(name='Зарплата', type=Category.INCOME, family=family)
 
 @pytest.fixture
 def personal_category(user, db):
+    Category = _core_models()['Category']
     return Category.objects.create(name='Личные', type=Category.EXPENSE, user=user)
 
 @pytest.fixture
 def transaction(user, expense_category, db):
-    return Transaction.objects.create(user=user, category=expense_category, amount=Decimal('1000.00'), description='Тест', date=date.today())
+    Transaction = _core_models()['Transaction']
+    return Transaction.objects.create(
+        user=user,
+        category=expense_category,
+        amount=Decimal('1000.00'),
+        description='Тест',
+        date=date.today(),
+    )
 
 @pytest.fixture
 def transactions_batch(family, db):
     """Создаёт пакет тестовых транзакций с локальными пользователями."""
+    models = _core_models()
+    FamilyMember = models['FamilyMember']
+    Category = models['Category']
+    Transaction = models['Transaction']
+
     # Создаём пользователей локально для этой фикстуры
     head = User.objects.create_user(username='batch_head', password='pass123')
     member = User.objects.create_user(username='batch_member', password='pass123')
     
-    FamilyMember.objects.create(user=head, family=family, is_head=True)
+    FamilyMember.objects.create(user=head, family=family, is_head=False)
     FamilyMember.objects.create(user=member, family=family, is_head=False)
     
     cat_exp = Category.objects.create(name='Продукты', type=Category.EXPENSE, family=family)
@@ -160,7 +197,13 @@ def transactions_batch(family, db):
     
 @pytest.fixture
 def budget(family, expense_category, db):
-    return Budget.objects.create(family=family, category=expense_category, amount=Decimal('10000.00'), month=date(2025, 10, 1))
+    Budget = _core_models()['Budget']
+    return Budget.objects.create(
+        family=family,
+        category=expense_category,
+        amount=Decimal('10000.00'),
+        month=date(2025, 10, 1),
+    )
 
 @pytest.fixture
 def full_family_setup(family, family_head, family_member, expense_category, income_category, budget, transactions_batch):
