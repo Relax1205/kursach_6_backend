@@ -275,6 +275,10 @@ def import_transactions_from_csv(file, user):
                     raise ValidationError(
                         f'Строка {row_number}: пользователь "{username}" не найден в семье.'
                     )
+                if transaction_user != user and not user.has_perm('core.can_manage_family'):
+                    raise ValidationError(
+                        f'Строка {row_number}: можно импортировать операции только от своего имени.'
+                    )
 
             if family:
                 category, _ = Category.objects.get_or_create(

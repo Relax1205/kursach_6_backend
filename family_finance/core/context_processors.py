@@ -1,4 +1,4 @@
-from .roles import get_family_member_for_user
+from .roles import get_family_member_for_user, get_member_role
 
 
 def family_context(request):
@@ -8,6 +8,7 @@ def family_context(request):
             'family': None,
             'is_head': False,
             'can_manage': False,
+            'family_role': None,
         }
 
     family_member = get_family_member_for_user(request.user)
@@ -17,6 +18,7 @@ def family_context(request):
             'family': None,
             'is_head': False,
             'can_manage': False,
+            'family_role': None,
         }
 
     return {
@@ -24,4 +26,5 @@ def family_context(request):
         'family': family_member.family,
         'is_head': family_member.is_head,
         'can_manage': request.user.has_perm('core.can_manage_family'),
+        'family_role': get_member_role(family_member),
     }

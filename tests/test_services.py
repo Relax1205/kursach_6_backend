@@ -2,8 +2,9 @@ import pytest
 from decimal import Decimal
 from datetime import date
 from io import StringIO
+from django.core.exceptions import ValidationError
 from core.services import get_monthly_summary, get_budget_status, import_transactions_from_csv, export_transactions_to_csv
-from core.models import Transaction
+from core.models import FamilyMember, Transaction
 from django.core.files.uploadedfile import SimpleUploadedFile
 
 @pytest.mark.django_db
@@ -47,3 +48,31 @@ class TestCSVServices:
         count = import_transactions_from_csv(f, user)
         assert count == 1
         assert Transaction.objects.filter(user=user, category__name='Тест').exists()
+
+    def test_member_cannot_import_for_other_family_user(self, family_head, family_member):
+        csv_data = (
+            "Date,User,Type,Category,Amount,Description\n"
+            "2025-10-01,head_user,expense,Groceries,100,Imported"
+        )
+        f = SimpleUploadedFile("family.csv", csv_data.encode('utf-8'), content_type="text/csv")
+
+        with pytest.raises(ValidationError, match='только от своего имени'):
+            import_transactions_from_csv(f, family_member)
+
+        assert Transaction.objects.count() == 0
+
+    def test_head_can_import_for_other_family_user(self, family_head, family_member):
+        csv_data = (
+            "Date,User,Type,Category,Amount,Description\n"
+            "2025-10-01,member_user,expense,Groceries,100,Imported"
+        )
+        f = SimpleUploadedFile("family.csv", csv_data.encode('utf-8'), content_type="text/csv")
+
+        count = import_transactions_from_csv(f, family_head)
+
+        assert count == 1
+        assert Transaction.objects.filter(
+            user=family_member,
+            category__family=FamilyMember.objects.get(user=family_head).family,
+            amount=Decimal('100'),
+        ).exists()

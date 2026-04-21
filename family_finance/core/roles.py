@@ -1,4 +1,5 @@
 from django.contrib.auth.models import Group, Permission
+from django.core.exceptions import ValidationError
 from django.db import transaction
 
 from .models import FamilyMember
@@ -127,6 +128,11 @@ def ensure_default_groups():
 def assign_family_role(member, role, demoted_head_role=ROLE_VIEWER):
     if role not in ROLE_GROUP_NAMES:
         raise ValueError(f'Unknown family role: {role}')
+
+    if member.is_head and role != ROLE_HEAD:
+        raise ValidationError(
+            'Нельзя снять роль главы семьи с текущего главы. Сначала назначьте нового главу.'
+        )
 
     if role == ROLE_HEAD:
         former_heads = list(

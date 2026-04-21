@@ -237,7 +237,11 @@ def family_member_role_update(request, member_id):
         form = FamilyMemberRoleForm(request.POST)
         if form.is_valid():
             role = form.cleaned_data['role']
-            assign_family_role(member, role)
+            try:
+                assign_family_role(member, role)
+            except ValidationError as exc:
+                messages.error(request, ' '.join(exc.messages))
+                return redirect('family_members')
             messages.success(
                 request,
                 f'Роль пользователя {member.user.username} изменена.',

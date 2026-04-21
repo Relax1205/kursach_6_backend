@@ -24,7 +24,7 @@
                 <p><strong>Ваша роль:</strong>
                     {% if is_head %}
                     <span class="badge bg-danger">Глава семьи</span>
-                    {% elif can_manage %}
+                    {% elif family_role == 'member' %}
                     <span class="badge bg-success">Член семьи</span>
                     {% else %}
                     <span class="badge bg-secondary">Наблюдатель</span>
