@@ -1,8 +1,11 @@
 from django.urls import path
 
+from .openapi import openapi_schema, swagger_ui
 from . import views
 
 urlpatterns = [
+    path('openapi.json', openapi_schema, name='openapi_schema'),
+    path('swagger/', swagger_ui, name='swagger_ui'),
     path('register/', views.register_view, name='register'),
     path('', views.family_dashboard, name='family_dashboard'),
     path('family/create/', views.family_create, name='family_create'),
